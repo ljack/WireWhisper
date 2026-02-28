@@ -58,6 +58,7 @@ class TunProcessor(
         private const val MAX_PACKET_SIZE = 32_767
         private const val UDP_IDLE_TIMEOUT_MS = 60_000L
         private const val SELECTOR_TIMEOUT_MS = 100L
+        private const val TCP_CONNECT_TIMEOUT_MS = 5_000
     }
 
     private val parser = PacketParser()
@@ -145,20 +146,23 @@ class TunProcessor(
         // 1. Track the flow
         flowTracker.onPacket(info, outgoing = true)
 
-        // 2. Resolve UID (best-effort, non-blocking)
-        uidResolver.resolveAndEnrich(info, flowTracker)
+        // 2-3. Enrichment (best-effort, must not crash the relay)
+        try {
+            uidResolver.resolveAndEnrich(info, flowTracker)
 
-        // 3. Hostname resolution: check cache for new flows, intercept DNS queries
-        val cachedHostname = hostnameResolver.lookupHostname(info.dstAddress)
-        if (cachedHostname != null) {
-            flowTracker.enrichFlowGeo(info.flowKey, country = null, hostname = cachedHostname)
-        }
-        if (info.protocol == Protocol.UDP && info.dstPort == 53) {
-            val dnsPayloadOffset = info.ipHeaderLength + UdpHeader_LENGTH
-            if (dnsPayloadOffset < length) {
-                val dnsBuf = ByteBuffer.wrap(packet.array(), dnsPayloadOffset, length - dnsPayloadOffset)
-                hostnameResolver.onDnsQuery(dnsBuf)
+            val cachedHostname = hostnameResolver.lookupHostname(info.dstAddress)
+            if (cachedHostname != null) {
+                flowTracker.enrichFlowGeo(info.flowKey, country = null, hostname = cachedHostname)
             }
+            if (info.protocol == Protocol.UDP && info.dstPort == 53) {
+                val dnsPayloadOffset = info.ipHeaderLength + UdpHeader_LENGTH
+                if (dnsPayloadOffset < length) {
+                    val dnsBuf = ByteBuffer.wrap(packet.array(), dnsPayloadOffset, length - dnsPayloadOffset)
+                    hostnameResolver.onDnsQuery(dnsBuf)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Enrichment error (non-fatal)", e)
         }
 
         // 4. Relay to actual destination
@@ -245,8 +249,12 @@ class TunProcessor(
 
                 // Parse DNS responses (port 53)
                 if (sender.port == 53 && responseBuffer.remaining() > 0) {
-                    val dnsBuf = responseBuffer.duplicate()
-                    hostnameResolver.onDnsResponse(dnsBuf)
+                    try {
+                        val dnsBuf = responseBuffer.duplicate()
+                        hostnameResolver.onDnsResponse(dnsBuf)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "DNS response parse error (non-fatal)", e)
+                    }
                 }
 
                 // Track incoming flow
@@ -290,17 +298,21 @@ class TunProcessor(
         val sessionKey = info.flowKey.hashCode().toLong()
 
         if (info.isSyn && !info.isSynAck) {
-            // New TCP connection: open a protected socket to the real destination
-            val session = openTcpSession(info) ?: return
-            tcpSessions[sessionKey] = session
-
-            // Send SYN-ACK back to the app via TUN
-            val synAck = buildTcpControlPacket(
-                session = session,
-                flags = TCP_SYN or TCP_ACK,
-            )
-            writeTun(synAck)
-            session.state = TcpState.SYN_RECEIVED
+            // Launch TCP connect asynchronously — blocking connect must not stall the read loop
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val session = openTcpSession(info) ?: return@launch
+                    tcpSessions[sessionKey] = session
+                    val synAck = buildTcpControlPacket(
+                        session = session,
+                        flags = TCP_SYN or TCP_ACK,
+                    )
+                    writeTun(synAck)
+                    session.state = TcpState.SYN_RECEIVED
+                } catch (e: Exception) {
+                    Log.w(TAG, "TCP session setup failed to ${info.dstAddress}:${info.dstPort}", e)
+                }
+            }
             return
         }
 
@@ -339,7 +351,11 @@ class TunProcessor(
                     // Extract SNI from first data packet on port 443
                     if (!session.sniChecked && info.dstPort == 443 && payload.isNotEmpty()) {
                         session.sniChecked = true
-                        hostnameResolver.onTlsClientHello(info.flowKey, ByteBuffer.wrap(payload))
+                        try {
+                            hostnameResolver.onTlsClientHello(info.flowKey, ByteBuffer.wrap(payload))
+                        } catch (e: Exception) {
+                            Log.w(TAG, "SNI parse error (non-fatal)", e)
+                        }
                     }
 
                     // Update our expected ack number
@@ -363,9 +379,13 @@ class TunProcessor(
     private fun openTcpSession(info: PacketInfo): TcpSession? {
         return try {
             val channel = SocketChannel.open()
-            channel.configureBlocking(true)
             vpnService.protect(channel.socket())
-            channel.connect(InetSocketAddress(info.dstAddress, info.dstPort))
+            // Use Socket.connect with timeout to avoid blocking for 75+ seconds
+            channel.socket().connect(
+                InetSocketAddress(info.dstAddress, info.dstPort),
+                TCP_CONNECT_TIMEOUT_MS,
+            )
+            channel.configureBlocking(true)
 
             TcpSession(
                 srcAddress = info.srcAddress,
