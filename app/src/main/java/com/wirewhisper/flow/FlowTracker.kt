@@ -82,7 +82,7 @@ class FlowTracker {
         // Record traffic for sparkline
         val flowRecord = flows[key]
         if (flowRecord != null) {
-            trafficSampler?.recordTraffic(flowRecord.uid, info.totalLength)
+            trafficSampler?.recordTraffic(flowRecord.uid, info.totalLength, outgoing)
         }
 
         // Throttled snapshot for UI
@@ -91,6 +91,9 @@ class FlowTracker {
             _activeFlows.value = flows.values.toList()
         }
     }
+
+    /** Returns a flow record by key, or null if not tracked. */
+    fun getFlow(key: FlowKey): FlowRecord? = flows[key]
 
     /**
      * Enriches a flow with app identity info. Called by [UidResolver]
