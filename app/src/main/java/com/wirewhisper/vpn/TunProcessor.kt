@@ -5,9 +5,11 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.wirewhisper.core.model.PacketInfo
 import com.wirewhisper.core.model.Protocol
+import com.wirewhisper.firewall.BlockingEngine
 import com.wirewhisper.flow.FlowTracker
 import com.wirewhisper.flow.HostnameResolver
 import com.wirewhisper.flow.UidResolver
+import com.wirewhisper.geo.GeoResolver
 import com.wirewhisper.packet.PacketParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +54,8 @@ class TunProcessor(
     private val flowTracker: FlowTracker,
     private val uidResolver: UidResolver,
     private val hostnameResolver: HostnameResolver,
+    private val geoResolver: GeoResolver,
+    private val blockingEngine: BlockingEngine,
     private val scope: CoroutineScope,
 ) {
     companion object {
@@ -65,6 +69,7 @@ class TunProcessor(
     private val parser = PacketParser()
     private val tunInput = FileInputStream(tunFd.fileDescriptor)
     private val tunOutput = FileOutputStream(tunFd.fileDescriptor)
+    private val geoResolvingIps = ConcurrentHashMap.newKeySet<InetAddress>()
 
     // UDP relay: local srcPort → DatagramChannel
     private val udpChannels = ConcurrentHashMap<Int, UdpSession>()
@@ -155,6 +160,22 @@ class TunProcessor(
             if (cachedHostname != null) {
                 flowTracker.enrichFlowGeo(info.flowKey, country = null, hostname = cachedHostname)
             }
+
+            // Geo-resolve destination IP (fire-and-forget, deduped by IP)
+            val dstAddr = info.dstAddress
+            val flowKey = info.flowKey
+            if (geoResolvingIps.add(dstAddr)) {
+                scope.launch {
+                    try {
+                        val geo = geoResolver.resolve(dstAddr)
+                        if (geo != null) {
+                            flowTracker.enrichFlowGeo(flowKey, country = geo.countryCode, hostname = null)
+                        }
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Geo resolve failed for ${dstAddr.hostAddress}", e)
+                    }
+                }
+            }
             if (info.protocol == Protocol.UDP && info.dstPort == 53) {
                 val dnsPayloadOffset = info.ipHeaderLength + UdpHeader_LENGTH
                 if (dnsPayloadOffset < length) {
@@ -166,7 +187,13 @@ class TunProcessor(
             Log.w(TAG, "Enrichment error (non-fatal)", e)
         }
 
-        // 4. Relay to actual destination
+        // 4. Check if blocked
+        val flow = flowTracker.getFlow(info.flowKey)
+        if (flow != null && blockingEngine.isBlocked(flow.packageName, flow.dnsHostname)) {
+            return  // drop packet
+        }
+
+        // 5. Relay to actual destination
         when (info.protocol) {
             Protocol.UDP -> relayUdp(info, packet, length)
             Protocol.TCP -> relayTcp(info, packet, length)

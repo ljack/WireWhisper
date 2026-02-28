@@ -95,6 +95,8 @@ class WireWhisperVpnService : VpnService() {
             flowTracker = app.flowTracker,
             uidResolver = app.uidResolver,
             hostnameResolver = app.hostnameResolver,
+            geoResolver = app.geoResolver,
+            blockingEngine = app.blockingEngine,
             scope = serviceScope,
         )
         tunProcessor!!.start()
