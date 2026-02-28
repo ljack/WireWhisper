@@ -25,6 +25,7 @@ import java.nio.channels.Selector
 import java.nio.channels.SelectionKey
 import java.nio.channels.SocketChannel
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.channels.Channel as CoroutineChannel
 
 /**
  * Reads raw IP packets from the TUN file descriptor, extracts metadata
@@ -298,16 +299,20 @@ class TunProcessor(
         val sessionKey = info.flowKey.hashCode().toLong()
 
         if (info.isSyn && !info.isSynAck) {
+            // Extract client's initial sequence number from TCP header
+            val tcpOffset = packet.position() + info.ipHeaderLength
+            val clientSeqNum = packet.getInt(tcpOffset + 4).toLong() and 0xFFFFFFFFL
             // Launch TCP connect asynchronously — blocking connect must not stall the read loop
             scope.launch(Dispatchers.IO) {
                 try {
-                    val session = openTcpSession(info) ?: return@launch
+                    val session = openTcpSession(info, clientSeqNum + 1) ?: return@launch
                     tcpSessions[sessionKey] = session
                     val synAck = buildTcpControlPacket(
                         session = session,
                         flags = TCP_SYN or TCP_ACK,
                     )
                     writeTun(synAck)
+                    session.ourSeqNum++ // SYN-ACK consumes 1 sequence number
                     session.state = TcpState.SYN_RECEIVED
                 } catch (e: Exception) {
                     Log.w(TAG, "TCP session setup failed to ${info.dstAddress}:${info.dstPort}", e)
@@ -325,7 +330,6 @@ class TunProcessor(
             }
 
             info.isFin -> {
-                // App is closing the connection
                 val finAck = buildTcpControlPacket(session, TCP_FIN or TCP_ACK)
                 writeTun(finAck)
                 session.close()
@@ -333,22 +337,21 @@ class TunProcessor(
             }
 
             info.isAck && session.state == TcpState.SYN_RECEIVED -> {
-                // Handshake complete
                 session.state = TcpState.ESTABLISHED
-                // Start a coroutine to read responses from the destination
                 session.readerJob = scope.launch(Dispatchers.IO) {
                     tcpReadFromRemote(session, sessionKey)
+                }
+                session.writerJob = scope.launch(Dispatchers.IO) {
+                    tcpWriteToRemote(session, sessionKey)
                 }
             }
 
             session.state == TcpState.ESTABLISHED -> {
-                // Data packet from app → forward to destination
                 val payloadOffset = info.ipHeaderLength + info.transportHeaderLength
                 if (payloadOffset < packetLength) {
                     val payload = ByteArray(packetLength - payloadOffset)
                     System.arraycopy(packet.array(), payloadOffset, payload, 0, payload.size)
 
-                    // Extract SNI from first data packet on port 443
                     if (!session.sniChecked && info.dstPort == 443 && payload.isNotEmpty()) {
                         session.sniChecked = true
                         try {
@@ -358,25 +361,18 @@ class TunProcessor(
                         }
                     }
 
-                    // Update our expected ack number
                     session.theirSeqNum += payload.size
 
-                    try {
-                        session.channel.write(ByteBuffer.wrap(payload))
-                    } catch (e: IOException) {
-                        Log.w(TAG, "TCP write to remote failed", e)
-                        sendRst(session, sessionKey)
-                    }
-
-                    // Send ACK back to app
                     val ack = buildTcpControlPacket(session, TCP_ACK)
                     writeTun(ack)
+
+                    session.writeQueue.trySend(payload)
                 }
             }
         }
     }
 
-    private fun openTcpSession(info: PacketInfo): TcpSession? {
+    private fun openTcpSession(info: PacketInfo, theirSeqNum: Long): TcpSession? {
         return try {
             val channel = SocketChannel.open()
             vpnService.protect(channel.socket())
@@ -395,7 +391,7 @@ class TunProcessor(
                 ipVersion = info.ipVersion,
                 channel = channel,
                 ourSeqNum = System.nanoTime() and 0xFFFFFFFFL,  // random-ish ISN
-                theirSeqNum = 1, // will be set from the SYN packet's seq + 1
+                theirSeqNum = theirSeqNum, // client SYN seq + 1
                 state = TcpState.CONNECTING,
             )
         } catch (e: IOException) {
@@ -448,6 +444,18 @@ class TunProcessor(
         }
         session.close()
         tcpSessions.remove(sessionKey)
+    }
+
+    /** Drains the write queue and sends data to the remote server. */
+    private suspend fun tcpWriteToRemote(session: TcpSession, sessionKey: Long) {
+        try {
+            for (data in session.writeQueue) {
+                session.channel.write(ByteBuffer.wrap(data))
+            }
+        } catch (e: IOException) {
+            if (running) Log.w(TAG, "TCP write to remote failed", e)
+            sendRst(session, sessionKey)
+        }
     }
 
     private fun sendRst(session: TcpSession, sessionKey: Long) {
@@ -552,16 +560,62 @@ class TunProcessor(
         tcp.putInt(session.theirSeqNum.toInt())    // ack
         tcp.putShort(((tcpHeaderLen / 4 shl 12) or flags).toShort())
         tcp.putShort(65535.toShort()) // window
-        tcp.putShort(0)              // checksum (filled below)
+        tcp.putShort(0)              // checksum placeholder
         tcp.putShort(0)              // urgent pointer
         if (payload.isNotEmpty()) tcp.put(payload)
         tcp.flip()
 
+        // Compute TCP checksum (mandatory for both IPv4 and IPv6)
+        val srcAddr = session.dstAddress  // from server perspective
+        val dstAddr = session.srcAddress  // back to app
+        computeTcpChecksum(tcp, srcAddr, dstAddr, tcpLen)
+
         return if (session.ipVersion == 4) {
-            wrapIp4(session.dstAddress, session.srcAddress, 6, tcp, tcpLen)
+            wrapIp4(srcAddr, dstAddr, 6, tcp, tcpLen)
         } else {
-            wrapIp6(session.dstAddress, session.srcAddress, 6, tcp, tcpLen)
+            wrapIp6(srcAddr, dstAddr, 6, tcp, tcpLen)
         }
+    }
+
+    /**
+     * Computes the TCP checksum over the pseudo-header + TCP segment.
+     * Writes the result into the checksum field at offset 16 in the segment.
+     */
+    private fun computeTcpChecksum(
+        segment: ByteBuffer,
+        srcAddr: InetAddress,
+        dstAddr: InetAddress,
+        segmentLength: Int,
+    ) {
+        var sum = 0L
+        val pos = segment.position()
+
+        // Pseudo-header: src address + dst address + zero + protocol(6) + TCP length
+        val srcBytes = srcAddr.address
+        val dstBytes = dstAddr.address
+        for (i in srcBytes.indices step 2) {
+            sum += ((srcBytes[i].toInt() and 0xFF) shl 8) or (srcBytes[i + 1].toInt() and 0xFF)
+        }
+        for (i in dstBytes.indices step 2) {
+            sum += ((dstBytes[i].toInt() and 0xFF) shl 8) or (dstBytes[i + 1].toInt() and 0xFF)
+        }
+        sum += 6  // protocol = TCP
+        sum += segmentLength
+
+        // TCP segment (checksum field at offset 16 is already 0)
+        for (i in 0 until segmentLength - 1 step 2) {
+            sum += ((segment.get(pos + i).toInt() and 0xFF) shl 8) or
+                    (segment.get(pos + i + 1).toInt() and 0xFF)
+        }
+        if (segmentLength % 2 != 0) {
+            sum += (segment.get(pos + segmentLength - 1).toInt() and 0xFF) shl 8
+        }
+
+        // Fold 32-bit sum into 16 bits
+        while (sum shr 16 != 0L) sum = (sum and 0xFFFF) + (sum shr 16)
+        val checksum = sum.inv().toInt() and 0xFFFF
+
+        segment.putShort(pos + 16, checksum.toShort())
     }
 
     private fun buildIp4UdpPacket(
@@ -683,9 +737,13 @@ class TunProcessor(
         var state: TcpState,
         var sniChecked: Boolean = false,
         var readerJob: Job? = null,
+        var writerJob: Job? = null,
+        val writeQueue: CoroutineChannel<ByteArray> = CoroutineChannel(CoroutineChannel.UNLIMITED),
     ) {
         fun close() {
             readerJob?.cancel()
+            writerJob?.cancel()
+            writeQueue.close()
             try { channel.close() } catch (_: IOException) {}
             state = TcpState.CLOSED
         }
