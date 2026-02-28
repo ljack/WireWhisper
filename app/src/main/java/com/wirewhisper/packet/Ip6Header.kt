@@ -63,7 +63,7 @@ data class Ip6Header(
             while (nextHeader in EXTENSION_HEADERS) {
                 if (start + offset + 2 > buffer.limit()) break
                 val extNextHeader = buffer.get(start + offset).toInt() and 0xFF
-                val extLength = (buffer.get(start + offset + 1).toInt() and 0xFF + 1) * 8
+                val extLength = ((buffer.get(start + offset + 1).toInt() and 0xFF) + 1) * 8
                 offset += extLength
                 nextHeader = extNextHeader
             }
