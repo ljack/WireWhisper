@@ -71,9 +71,9 @@ fun SettingsScreen(
                 headlineContent = { Text("GeoIP online lookup") },
                 supportingContent = {
                     Text(
-                        "Resolve destination IPs to countries via ip-api.com. " +
-                        "When disabled, only private/local addresses are identified. " +
-                        "For full privacy, embed a local GeoIP database instead.",
+                        "Send IPs to ip-api.com for enriched data (city, ASN, org). " +
+                        "Country-level resolution works offline using the built-in " +
+                        "DB-IP database. Toggle this for extra detail only.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 },
@@ -93,7 +93,8 @@ fun SettingsScreen(
                     Text(
                         "WireWhisper v0.1.0\n" +
                         "Privacy-focused network monitor for stock Android.\n" +
-                        "All processing is performed on-device. No telemetry.",
+                        "All processing is performed on-device. No telemetry.\n\n" +
+                        "IP geolocation by DB-IP (db-ip.com), CC BY 4.0.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 },
