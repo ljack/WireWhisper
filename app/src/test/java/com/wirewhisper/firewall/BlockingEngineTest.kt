@@ -25,21 +25,28 @@ class BlockingEngineTest {
         override suspend fun getAllRulesOnce(): List<BlockRuleEntity> = rules.toList()
 
         override suspend fun getAppRule(packageName: String): BlockRuleEntity? =
-            rules.firstOrNull { it.packageName == packageName && it.hostname == null }
+            rules.firstOrNull { it.packageName == packageName && it.hostname == null && it.countryCode == null }
 
         override suspend fun getHostnameRule(packageName: String, hostname: String): BlockRuleEntity? =
             rules.firstOrNull { it.packageName == packageName && it.hostname == hostname }
+
+        override suspend fun getCountryRule(countryCode: String): BlockRuleEntity? =
+            rules.firstOrNull { it.countryCode == countryCode && it.packageName == null }
 
         override suspend fun insert(rule: BlockRuleEntity) {
             rules.add(rule)
         }
 
         override suspend fun deleteAppRule(packageName: String) {
-            rules.removeAll { it.packageName == packageName && it.hostname == null }
+            rules.removeAll { it.packageName == packageName && it.hostname == null && it.countryCode == null }
         }
 
         override suspend fun deleteHostnameRule(packageName: String, hostname: String) {
             rules.removeAll { it.packageName == packageName && it.hostname == hostname }
+        }
+
+        override suspend fun deleteCountryRule(countryCode: String) {
+            rules.removeAll { it.countryCode == countryCode && it.packageName == null }
         }
     }
 
@@ -169,5 +176,96 @@ class BlockingEngineTest {
         engine.notifyBlocked("com.example.app", "ads.example.com")
         assertEquals(1L, engine.getHostnameBlockedCount("com.example.app", "ads.example.com"))
         assertEquals(1L, engine.getAppBlockedCount("com.example.app"))
+    }
+
+    // ── Country blocking tests ───────────────────────────
+
+    @Test
+    fun `isBlocked returns true for blocked country`() = runTest {
+        val dao = FakeBlockRuleDao()
+        val engine = BlockingEngine(dao, this)
+
+        engine.toggleCountryBlock("CN")
+        advanceUntilIdle()
+
+        assertTrue(engine.isBlocked(null, null, "CN"))
+        assertTrue(engine.isBlocked("com.example.app", null, "CN"))
+        assertTrue(engine.isBlocked("com.example.app", "api.example.com", "CN"))
+    }
+
+    @Test
+    fun `country block independent of app block`() = runTest {
+        val dao = FakeBlockRuleDao()
+        val engine = BlockingEngine(dao, this)
+
+        engine.toggleCountryBlock("RU")
+        advanceUntilIdle()
+
+        // Country blocked, but app is not blocked
+        assertTrue(engine.isBlocked("com.example.app", null, "RU"))
+        assertFalse(engine.isBlocked("com.example.app", null, "US"))
+        assertFalse(engine.isBlocked("com.example.app", null, null))
+    }
+
+    @Test
+    fun `toggle country block on then off`() = runTest {
+        val dao = FakeBlockRuleDao()
+        val engine = BlockingEngine(dao, this)
+
+        engine.toggleCountryBlock("DE")
+        advanceUntilIdle()
+        assertTrue(engine.isCountryBlocked("DE"))
+        assertTrue(engine.isBlocked(null, null, "DE"))
+
+        engine.toggleCountryBlock("DE")
+        advanceUntilIdle()
+        assertFalse(engine.isCountryBlocked("DE"))
+        assertFalse(engine.isBlocked(null, null, "DE"))
+    }
+
+    @Test
+    fun `loadRules restores country block from DAO`() = runTest {
+        val dao = FakeBlockRuleDao()
+        dao.rules.add(BlockRuleEntity(countryCode = "CN"))
+        dao.rules.add(BlockRuleEntity(packageName = "com.blocked.app"))
+
+        val engine = BlockingEngine(dao, this)
+        engine.loadRules()
+
+        assertTrue(engine.isCountryBlocked("CN"))
+        assertTrue(engine.isBlocked(null, null, "CN"))
+        assertTrue(engine.isBlocked("com.blocked.app", null))
+        assertFalse(engine.isCountryBlocked("US"))
+    }
+
+    @Test
+    fun `notifyBlocked increments country counter`() {
+        val engine = BlockingEngine(FakeBlockRuleDao(), CoroutineScope(Dispatchers.Unconfined))
+        assertEquals(0L, engine.getCountryBlockedCount("CN"))
+
+        engine.notifyBlocked(null, null, "CN")
+        assertEquals(1L, engine.getCountryBlockedCount("CN"))
+
+        engine.notifyBlocked("com.example.app", null, "CN")
+        assertEquals(2L, engine.getCountryBlockedCount("CN"))
+        assertEquals(1L, engine.getAppBlockedCount("com.example.app"))
+    }
+
+    @Test
+    fun `blocked countries flow emits updates`() = runTest {
+        val dao = FakeBlockRuleDao()
+        val engine = BlockingEngine(dao, this)
+
+        assertTrue(engine.blockedCountriesFlow.value.isEmpty())
+
+        engine.toggleCountryBlock("CN")
+        advanceUntilIdle()
+
+        assertTrue("CN" in engine.blockedCountriesFlow.value)
+
+        engine.toggleCountryBlock("CN")
+        advanceUntilIdle()
+
+        assertFalse("CN" in engine.blockedCountriesFlow.value)
     }
 }

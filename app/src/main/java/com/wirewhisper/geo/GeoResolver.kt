@@ -22,6 +22,9 @@ import java.util.concurrent.atomic.AtomicReference
  */
 interface GeoResolver {
     suspend fun resolve(address: InetAddress): GeoResult?
+
+    /** Synchronous country-only lookup using cache + offline DB. Safe for hot path. */
+    fun resolveCountrySync(address: InetAddress): String? = null
 }
 
 data class GeoResult(
@@ -107,6 +110,27 @@ class InMemoryGeoResolver(
                 persistResult(ipStr, result)
                 return result
             }
+        }
+
+        return null
+    }
+
+    override fun resolveCountrySync(address: InetAddress): String? {
+        // 1. In-memory LRU cache
+        cache.get(address)?.let { return it.countryCode }
+
+        // 2. Built-in heuristics
+        val builtIn = resolveBuiltIn(address)
+        if (builtIn != null) {
+            cache.put(address, builtIn)
+            return builtIn.countryCode
+        }
+
+        // 3. Offline binary DB only — no network, no Room
+        val offlineResult = resolveOffline(address)
+        if (offlineResult != null) {
+            cache.put(address, offlineResult)
+            return offlineResult.countryCode
         }
 
         return null

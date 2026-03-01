@@ -281,6 +281,8 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
                 totalBytes = countryFlows.sumOf { it.bytesSent + it.bytesReceived },
                 apps = appModels,
                 isExpanded = country in expandedC,
+                isBlocked = app.blockingEngine.isCountryBlocked(country),
+                blockedAttemptCount = app.blockingEngine.getCountryBlockedCount(country),
             )
         }.sortedWith(compareByDescending<CountryGroupUiModel> { it.countryCode != "??" }.thenByDescending { it.totalBytes })
 
@@ -355,6 +357,10 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleHostnameBlock(packageName: String, hostname: String) {
         app.blockingEngine.toggleHostnameBlock(packageName, hostname)
+    }
+
+    fun toggleCountryBlock(countryCode: String) {
+        app.blockingEngine.toggleCountryBlock(countryCode)
     }
 
     private fun formatCountryDisplay(code: String): String {

@@ -10,7 +10,9 @@ import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -328,6 +330,7 @@ fun NowScreen(
                                 CountryGroupItem(
                                     group = group,
                                     onToggleCountry = { viewModel.toggleCountryExpansion(group.countryCode) },
+                                    onToggleCountryBlock = { viewModel.toggleCountryBlock(group.countryCode) },
                                     onToggleApp = { uid -> viewModel.toggleCountryAppExpansion(group.countryCode, uid) },
                                     onSparklineClick = { uid -> viewModel.showTrafficDetail(uid) },
                                 )
@@ -459,10 +462,12 @@ private fun AppGroupItem(
 
 // region Country grouping composables
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CountryGroupItem(
     group: CountryGroupUiModel,
     onToggleCountry: () -> Unit,
+    onToggleCountryBlock: () -> Unit,
     onToggleApp: (Int) -> Unit,
     onSparklineClick: (Int) -> Unit,
 ) {
@@ -470,7 +475,10 @@ private fun CountryGroupItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clickable(onClick = onToggleCountry),
+            .combinedClickable(
+                onClick = onToggleCountry,
+                onLongClick = onToggleCountryBlock,
+            ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -480,7 +488,8 @@ private fun CountryGroupItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
+                    .padding(12.dp)
+                    .alpha(if (group.isBlocked) 0.5f else 1f),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -502,7 +511,15 @@ private fun CountryGroupItem(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.width(4.dp))
+
+                ShakingBlockIcon(
+                    isBlocked = group.isBlocked,
+                    blockedAttemptCount = group.blockedAttemptCount,
+                    onClick = onToggleCountryBlock,
+                    iconSize = 16,
+                    buttonSize = 28,
+                )
+
                 Icon(
                     if (group.isExpanded) Icons.Default.KeyboardArrowDown
                     else Icons.AutoMirrored.Filled.KeyboardArrowRight,

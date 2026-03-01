@@ -38,6 +38,8 @@ data class CountryGroupUiModel(
     val totalBytes: Long,
     val apps: List<CountryAppUiModel>,
     val isExpanded: Boolean,
+    val isBlocked: Boolean = false,
+    val blockedAttemptCount: Long = 0,
 )
 
 data class CountryAppUiModel(
