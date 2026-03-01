@@ -9,6 +9,12 @@ A privacy-focused network monitor for stock Android. No root required.
 WireWhisper uses Android's VpnService API to capture all device traffic, showing you exactly which apps are connecting where — with app attribution, DNS/TLS hostname resolution, country-level geolocation, and per-app/hostname/country blocking. All processing happens on-device. No telemetry.
 
 <p align="center">
+  <video src="docs/wirewhisper-demo.mp4" width="320" autoplay loop muted playsinline>
+    Your browser does not support the video tag.
+  </video>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/now-screen.png" width="24%" alt="Live Flows screen with per-app traffic monitoring, search, and sort controls">
   <img src="docs/screenshots/country-blocking.png" width="24%" alt="Country blocking picker with search and per-country checkboxes">
   <img src="docs/screenshots/history.png" width="24%" alt="History screen with recorded flows and protocol/country filter tags">
