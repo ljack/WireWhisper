@@ -18,7 +18,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Locale
+import com.wirewhisper.ui.util.countryCodeToFlag
+import com.wirewhisper.ui.util.countryDisplayName
 
 class NowViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -370,17 +371,10 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
             "??" -> "\u2753 Unknown"
             else -> {
                 val flag = countryCodeToFlag(code)
-                val name = Locale.of("", code).displayCountry
+                val name = countryDisplayName(code)
                 "$flag $name"
             }
         }
-    }
-
-    private fun countryCodeToFlag(code: String): String {
-        if (code.length != 2) return "\uD83C\uDF10"
-        val first = 0x1F1E6 + (code[0].uppercaseChar() - 'A')
-        val second = 0x1F1E6 + (code[1].uppercaseChar() - 'A')
-        return String(intArrayOf(first, second), 0, 2)
     }
 
     private fun resolveAppInfo(uid: Int, flows: List<FlowRecord>): Pair<String, String?> {

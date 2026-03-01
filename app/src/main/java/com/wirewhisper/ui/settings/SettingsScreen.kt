@@ -42,6 +42,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wirewhisper.WireWhisperApp
+import com.wirewhisper.ui.util.countryCodeToFlag
+import com.wirewhisper.ui.util.countryDisplayName
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,17 +57,14 @@ private val allCountries: List<CountryEntry> by lazy {
             CountryEntry(
                 code = code,
                 flag = countryCodeToFlag(code),
-                name = Locale.of("", code).displayCountry,
+                name = countryDisplayName(code),
             )
         }
         .sortedBy { it.name }
 }
 
-private fun countryCodeToFlag(code: String): String {
-    if (code.length != 2) return "\uD83C\uDF10"
-    val first = 0x1F1E6 + (code[0].uppercaseChar() - 'A')
-    val second = 0x1F1E6 + (code[1].uppercaseChar() - 'A')
-    return String(intArrayOf(first, second), 0, 2)
+private val countryByCode: Map<String, CountryEntry> by lazy {
+    allCountries.associateBy { it.code }
 }
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
@@ -178,28 +177,27 @@ fun SettingsScreen(
             )
 
             if (blockedCountries.isNotEmpty()) {
+                val blockedEntries = remember(blockedCountries) {
+                    blockedCountries.mapNotNull { countryByCode[it] }.sortedBy { it.name }
+                }
                 FlowRow(
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                 ) {
-                    blockedCountries
-                        .sortedBy { Locale.of("", it).displayCountry }
-                        .forEach { code ->
-                            InputChip(
-                                selected = true,
-                                onClick = { viewModel.toggleCountryBlock(code) },
-                                label = {
-                                    Text("${countryCodeToFlag(code)} ${Locale.of("", code).displayCountry}")
-                                },
-                                trailingIcon = {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = "Unblock",
-                                        modifier = Modifier.height(16.dp),
-                                    )
-                                },
-                                modifier = Modifier.padding(end = 4.dp),
-                            )
-                        }
+                    blockedEntries.forEach { entry ->
+                        InputChip(
+                            selected = true,
+                            onClick = { viewModel.toggleCountryBlock(entry.code) },
+                            label = { Text("${entry.flag} ${entry.name}") },
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Unblock",
+                                    modifier = Modifier.height(16.dp),
+                                )
+                            },
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    }
                 }
             }
         }
@@ -267,7 +265,7 @@ private fun BlockedCountriesDialog(
             OutlinedTextField(
                 value = search,
                 onValueChange = { search = it },
-                placeholder = { Text("Search countries…") },
+                placeholder = { Text("Search countries\u2026") },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
