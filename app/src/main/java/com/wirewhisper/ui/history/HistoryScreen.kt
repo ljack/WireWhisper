@@ -11,10 +11,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.Card
@@ -41,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wirewhisper.core.model.FlowRecord
 import com.wirewhisper.core.model.Protocol
+import com.wirewhisper.ui.util.FastScrollColumn
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -167,8 +171,22 @@ fun HistoryScreen(
                 }
             }
 
+            // Blocked filter
+            FilterChip(
+                selected = filter.blocked == true,
+                onClick = {
+                    viewModel.setFilter(
+                        filter.copy(blocked = if (filter.blocked == true) null else true)
+                    )
+                },
+                label = { Text("Blocked") },
+                leadingIcon = if (filter.blocked == true) {
+                    { Icon(Icons.Default.Block, null, modifier = Modifier.size(16.dp)) }
+                } else null,
+            )
+
             // Clear all
-            if (filter.app != null || filter.country != null || filter.protocol != null) {
+            if (filter.app != null || filter.country != null || filter.protocol != null || filter.blocked != null) {
                 TextButton(onClick = { viewModel.clearFilters() }) {
                     Text("Clear all")
                 }
@@ -193,16 +211,30 @@ fun HistoryScreen(
                 )
             }
         } else {
-            LazyColumn {
-                items(flows) { flow ->
-                    HistoryFlowItem(
-                        flow = flow,
-                        onClick = { onFlowClick(flow.key.hashCode().toLong()) },
-                    )
+            val listState = rememberLazyListState()
+            FastScrollColumn(
+                listState = listState,
+                itemCount = flows.size,
+                timestampForIndex = { index -> flows.getOrNull(index)?.lastSeen ?: 0L },
+            ) {
+                LazyColumn(state = listState) {
+                    items(flows) { flow ->
+                        HistoryFlowItem(
+                            flow = flow,
+                            onClick = { onFlowClick(flow.key.hashCode().toLong()) },
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+private fun formatBlockReason(reason: String): String = when {
+    reason == "app" -> "Blocked app"
+    reason == "hostname" -> "Blocked host"
+    reason.startsWith("country:") -> "Blocked country (${reason.removePrefix("country:")})"
+    else -> reason
 }
 
 @Composable
@@ -215,14 +247,27 @@ private fun HistoryFlowItem(flow: FlowRecord, onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 4.dp)
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = if (flow.blocked)
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+            else
+                MaterialTheme.colorScheme.surfaceContainerLow,
         ),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (flow.blocked) {
+                    Icon(
+                        Icons.Default.Block,
+                        contentDescription = "Blocked",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
                 Text(
                     text = flow.appName ?: flow.packageName ?: "UID ${flow.uid}",
                     style = MaterialTheme.typography.titleSmall,
@@ -250,6 +295,14 @@ private fun HistoryFlowItem(flow: FlowRecord, onClick: () -> Unit) {
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(8.dp))
+                if (flow.blocked && flow.blockReason != null) {
+                    Text(
+                        text = formatBlockReason(flow.blockReason!!),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
                 Text(
                     text = "${flow.protocol.name} ${flow.country ?: ""}",
                     style = MaterialTheme.typography.bodySmall,

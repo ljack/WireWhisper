@@ -62,18 +62,22 @@ class BlockingEngine(
     }
 
     /**
-     * Hot-path check for packet filtering. Must be fast.
+     * Hot-path check for packet filtering. Returns the block reason if blocked, null if allowed.
+     * Single lookup serves both the blocking decision and the reason for persistence.
      */
-    fun isBlocked(packageName: String?, hostname: String?, country: String? = null): Boolean {
-        if (country != null && country in blockedCountries) return true
-        if (packageName == null) return false
-        if (packageName in blockedApps) return true
+    fun determineBlockReason(packageName: String?, hostname: String?, country: String? = null): String? {
+        if (country != null && country in blockedCountries) return "country:$country"
+        if (packageName == null) return null
+        if (packageName in blockedApps) return "app"
         if (hostname != null) {
             val hostSet = blockedHostnames[packageName]
-            if (hostSet != null && hostname in hostSet) return true
+            if (hostSet != null && hostname in hostSet) return "hostname"
         }
-        return false
+        return null
     }
+
+    fun isBlocked(packageName: String?, hostname: String?, country: String? = null): Boolean =
+        determineBlockReason(packageName, hostname, country) != null
 
     fun isCountryBlocked(countryCode: String): Boolean = countryCode in blockedCountries
 
@@ -131,6 +135,12 @@ class BlockingEngine(
         if (country != null) {
             countryBlockedCounts.compute(country) { _, v -> (v ?: 0) + 1 }
         }
+    }
+
+    fun resetBlockedCounts() {
+        appBlockedCounts.clear()
+        hostnameBlockedCounts.clear()
+        countryBlockedCounts.clear()
     }
 
     fun getAppBlockedCount(packageName: String): Long = appBlockedCounts[packageName] ?: 0

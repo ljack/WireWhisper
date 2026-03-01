@@ -47,6 +47,19 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
     private val _frozenOrder = MutableStateFlow<List<Int>?>(null)
     private var interactionResumeJob: Job? = null
 
+    // Time filter
+    private val _timeFilter = MutableStateFlow(TimeFilter.ALL)
+    val timeFilter: StateFlow<TimeFilter> = _timeFilter
+    private var fromNowTimestamp: Long = 0L
+
+    // Blocked-only filter
+    private val _showBlockedOnly = MutableStateFlow(false)
+    val showBlockedOnly: StateFlow<Boolean> = _showBlockedOnly
+
+    // Follow mode (auto-scroll to top)
+    private val _followMode = MutableStateFlow(false)
+    val followMode: StateFlow<Boolean> = _followMode
+
     // Icon cache to avoid repeated PackageManager lookups
     private val iconCache = mutableMapOf<String, Drawable?>()
     private val nameCache = mutableMapOf<Int, Pair<String, String?>>() // uid -> (appName, packageName)
@@ -63,6 +76,8 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         _sortMode,
         _sortingPaused,
         _frozenOrder,
+        _timeFilter,
+        _showBlockedOnly,
     ) { values ->
         val flows = values[0] as List<FlowRecord>
         val expanded = values[1] as Set<Int>
@@ -74,9 +89,14 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         val sortMode = values[7] as SortMode
         val paused = values[8] as Boolean
         val frozenOrder = values[9] as List<Int>?
+        val timeFilter = values[10] as TimeFilter
+        val blockedOnly = values[11] as Boolean
+
+        val filteredFlows = applyTimeFilter(flows, timeFilter)
+
         when (mode) {
-            GroupMode.BY_APP -> buildAppUiState(flows, expanded, query, sortMode, paused, frozenOrder)
-            GroupMode.BY_COUNTRY -> buildCountryUiState(flows, query, expandedC, expandedCA)
+            GroupMode.BY_APP -> buildAppUiState(filteredFlows, expanded, query, sortMode, paused, frozenOrder, blockedOnly)
+            GroupMode.BY_COUNTRY -> buildCountryUiState(filteredFlows, query, expandedC, expandedCA, blockedOnly)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NowUiState())
 
@@ -92,6 +112,23 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    fun setTimeFilter(filter: TimeFilter) {
+        if (filter == TimeFilter.FROM_NOW) fromNowTimestamp = System.currentTimeMillis()
+        _timeFilter.value = filter
+    }
+
+    fun toggleShowBlockedOnly() {
+        _showBlockedOnly.value = !_showBlockedOnly.value
+    }
+
+    fun toggleFollowMode() {
+        _followMode.value = !_followMode.value
+    }
+
+    fun disableFollowMode() {
+        _followMode.value = false
     }
 
     fun onSearchQueryChanged(query: String) {
@@ -194,6 +231,15 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         return VpnService.prepare(getApplication())
     }
 
+    private fun applyTimeFilter(flows: List<FlowRecord>, timeFilter: TimeFilter): List<FlowRecord> {
+        val cutoff = when (timeFilter) {
+            TimeFilter.ALL -> 0L
+            TimeFilter.FROM_NOW -> fromNowTimestamp
+            else -> System.currentTimeMillis() - timeFilter.durationMs!!
+        }
+        return if (cutoff == 0L) flows else flows.filter { it.lastSeen >= cutoff }
+    }
+
     private fun buildAppUiState(
         flows: List<FlowRecord>,
         expanded: Set<Int>,
@@ -201,6 +247,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         sortMode: SortMode = SortMode.RECENT_ACTIVITY,
         paused: Boolean = false,
         frozenOrder: List<Int>? = null,
+        blockedOnly: Boolean = false,
     ): NowUiState {
         if (flows.isEmpty()) return NowUiState(groupMode = GroupMode.BY_APP, sortMode = sortMode)
 
@@ -209,6 +256,10 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
 
         var groups = byUid.map { (uid, uidFlows) ->
             buildAppGroupModel(uid, uidFlows, uid in expanded)
+        }
+
+        if (blockedOnly) {
+            groups = groups.filter { it.isBlocked }
         }
 
         // Apply sorting
@@ -246,6 +297,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         query: String,
         expandedC: Set<String>,
         expandedCA: Set<String>,
+        blockedOnly: Boolean = false,
     ): NowUiState {
         if (flows.isEmpty()) return NowUiState(groupMode = GroupMode.BY_COUNTRY)
 
@@ -286,6 +338,10 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
                 blockedAttemptCount = app.blockingEngine.getCountryBlockedCount(country),
             )
         }.sortedWith(compareByDescending<CountryGroupUiModel> { it.countryCode != "??" }.thenByDescending { it.totalBytes })
+
+        if (blockedOnly) {
+            groups = groups.filter { it.isBlocked }
+        }
 
         if (query.isNotBlank()) {
             groups = groups.filter { group ->

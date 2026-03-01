@@ -75,6 +75,13 @@ class WireWhisperApp : Application() {
         BlockingEngine(db.blockRuleDao(), applicationScope)
     }
 
+    suspend fun resetHistory() {
+        flowTracker.clearAll()
+        trafficSampler.clearAll()
+        blockingEngine.resetBlockedCounts()
+        flowRepository.deleteAll()
+    }
+
     // ── Observable VPN state ───────────────────────────────────
 
     val vpnRunning = MutableStateFlow(false)

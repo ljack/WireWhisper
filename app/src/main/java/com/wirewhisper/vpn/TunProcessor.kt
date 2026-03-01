@@ -185,9 +185,10 @@ class TunProcessor(
         // 4. Check if blocked & record traffic (after enrichment so UID is resolved)
         val flow = flowTracker.getFlow(info.flowKey)
         val country = flow?.country ?: geoResolver.resolveCountrySync(info.dstAddress)
-        val isBlocked = blockingEngine.isBlocked(flow?.packageName, flow?.dnsHostname, country)
-        flowTracker.recordTrafficSample(info, outgoing = true, blocked = isBlocked)
-        if (isBlocked) {
+        val blockReason = blockingEngine.determineBlockReason(flow?.packageName, flow?.dnsHostname, country)
+        flowTracker.recordTrafficSample(info, outgoing = true, blocked = blockReason != null)
+        if (blockReason != null) {
+            flowTracker.markFlowBlocked(info.flowKey, blockReason)
             blockingEngine.notifyBlocked(flow?.packageName, flow?.dnsHostname, country)
             return  // drop packet
         }

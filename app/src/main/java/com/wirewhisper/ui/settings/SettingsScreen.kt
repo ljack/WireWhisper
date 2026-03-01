@@ -10,15 +10,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -30,6 +34,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wirewhisper.WireWhisperApp
 import com.wirewhisper.ui.util.countryCodeToFlag
@@ -47,6 +53,7 @@ import com.wirewhisper.ui.util.countryDisplayName
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 private data class CountryEntry(val code: String, val flag: String, val name: String)
@@ -83,6 +90,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun toggleCountryBlock(countryCode: String) {
         app.blockingEngine.toggleCountryBlock(countryCode)
     }
+
+    private val _resetInProgress = MutableStateFlow(false)
+    val resetInProgress = _resetInProgress.asStateFlow()
+
+    fun resetHistory() {
+        viewModelScope.launch {
+            _resetInProgress.value = true
+            app.resetHistory()
+            _resetInProgress.value = false
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -92,7 +110,9 @@ fun SettingsScreen(
 ) {
     val geoEnabled by viewModel.geoEnabled.collectAsStateWithLifecycle()
     val blockedCountries by viewModel.blockedCountries.collectAsStateWithLifecycle()
+    val resetInProgress by viewModel.resetInProgress.collectAsStateWithLifecycle()
     var showCountryPicker by remember { mutableStateOf(false) }
+    var showResetConfirm by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -230,6 +250,40 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(16.dp))
 
+        // Reset History section
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clickable(enabled = !resetInProgress) { showResetConfirm = true },
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
+        ) {
+            ListItem(
+                headlineContent = { Text("Reset History") },
+                supportingContent = {
+                    Text(
+                        "Clear all recorded flow history and traffic samples. Blocking rules are preserved.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+                leadingContent = {
+                    if (resetInProgress) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    } else {
+                        Icon(
+                            Icons.Default.DeleteForever,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                },
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
         // Monitoring mode section – Phase 2
         Card(
             modifier = Modifier
@@ -253,6 +307,31 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.height(80.dp)) // room for bottom nav
+    }
+
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text("Reset History") },
+            text = {
+                Text("This will permanently delete all recorded flow history and traffic samples. Blocking rules will be preserved.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showResetConfirm = false
+                        viewModel.resetHistory()
+                    },
+                ) {
+                    Text("Reset", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 
     if (showCountryPicker) {

@@ -20,6 +20,7 @@ interface FlowDao {
         WHERE (:packageName IS NULL OR packageName = :packageName)
           AND (:country IS NULL OR country = :country)
           AND (:protocol IS NULL OR protocol = :protocol)
+          AND (:blocked IS NULL OR blocked = :blocked)
           AND lastSeen >= :sinceMs
         ORDER BY lastSeen DESC
     """)
@@ -28,6 +29,7 @@ interface FlowDao {
         country: String?,
         protocol: Int?,
         sinceMs: Long = 0,
+        blocked: Boolean? = null,
     ): Flow<List<FlowEntity>>
 
     @Query("SELECT * FROM flows WHERE id = :id")

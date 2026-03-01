@@ -25,6 +25,7 @@ interface FlowRepository {
         country: String? = null,
         protocolNumber: Int? = null,
         sinceMs: Long = 0,
+        blocked: Boolean? = null,
     ): Flow<List<FlowRecord>>
 
     suspend fun getFlowById(id: Long): FlowRecord?
@@ -61,9 +62,12 @@ class RoomFlowRepository(
         country: String?,
         protocolNumber: Int?,
         sinceMs: Long,
+        blocked: Boolean?,
     ): Flow<List<FlowRecord>> =
-        dao.getFlowsFiltered(packageName, country, protocolNumber, sinceMs)
-            .map { list -> list.map { it.toFlowRecord() } }
+        dao.getFlowsFiltered(
+            packageName, country, protocolNumber, sinceMs,
+            blocked = blocked,
+        ).map { list -> list.map { it.toFlowRecord() } }
 
     override suspend fun getFlowById(id: Long): FlowRecord? =
         dao.getFlowById(id)?.toFlowRecord()
@@ -98,11 +102,13 @@ class InMemoryFlowRepository : FlowRepository {
         country: String?,
         protocolNumber: Int?,
         sinceMs: Long,
+        blocked: Boolean?,
     ): Flow<List<FlowRecord>> = _flows.map { list ->
         list.filter { record ->
             (packageName == null || record.packageName == packageName) &&
             (country == null || record.country == country) &&
             (protocolNumber == null || record.protocol.number == protocolNumber) &&
+            (blocked == null || record.blocked == blocked) &&
             record.lastSeen >= sinceMs
         }
     }

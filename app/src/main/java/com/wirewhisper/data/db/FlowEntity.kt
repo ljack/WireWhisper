@@ -22,6 +22,7 @@ import java.net.InetAddress
         Index("country"),
         Index("lastSeen"),
         Index("protocol"),
+        Index("blocked"),
     ]
 )
 data class FlowEntity(
@@ -43,6 +44,8 @@ data class FlowEntity(
     val lastSeen: Long,
     val country: String?,       // ISO country code
     val dnsHostname: String?,
+    val blocked: Boolean = false,
+    val blockReason: String? = null,
 ) {
     companion object {
         fun fromFlowRecord(record: FlowRecord): FlowEntity = FlowEntity(
@@ -62,6 +65,8 @@ data class FlowEntity(
             lastSeen = record.lastSeen,
             country = record.country,
             dnsHostname = record.dnsHostname,
+            blocked = record.blocked,
+            blockReason = record.blockReason,
         )
     }
 
@@ -87,6 +92,8 @@ data class FlowEntity(
             it.lastSeen = lastSeen
             it.country = country
             it.dnsHostname = dnsHostname
+            it.blocked = blocked
+            it.blockReason = blockReason
         }
     }
 }

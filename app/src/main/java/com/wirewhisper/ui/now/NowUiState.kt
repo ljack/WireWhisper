@@ -7,6 +7,15 @@ enum class GroupMode { BY_APP, BY_COUNTRY }
 
 enum class SortMode { RECENT_ACTIVITY, TOTAL_BYTES }
 
+enum class TimeFilter(val label: String, val shortLabel: String, val durationMs: Long?) {
+    ALL("Show All", "All", null),
+    LAST_5_MIN("Last 5 min", "5m", 5 * 60_000L),
+    LAST_HOUR("Last hour", "1h", 60 * 60_000L),
+    LAST_24H("Last 24h", "24h", 24 * 60 * 60_000L),
+    LAST_WEEK("Last week", "1w", 7 * 24 * 60 * 60_000L),
+    FROM_NOW("From now", "Now", 0L),
+}
+
 data class NowUiState(
     val groupMode: GroupMode = GroupMode.BY_APP,
     val sortMode: SortMode = SortMode.RECENT_ACTIVITY,

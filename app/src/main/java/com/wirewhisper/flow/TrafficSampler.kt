@@ -32,6 +32,10 @@ class TrafficSampler {
         buffer.add(bytes.toLong(), outgoing, blocked)
     }
 
+    fun clearAll() {
+        buffers.clear()
+    }
+
     fun getAppSamples(uid: Int): List<Long> {
         return buffers[uid]?.totalSnapshot() ?: List(WINDOW_SECONDS) { 0L }
     }

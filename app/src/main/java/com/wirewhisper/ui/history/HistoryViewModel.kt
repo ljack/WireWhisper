@@ -19,6 +19,7 @@ data class HistoryFilter(
     val country: String? = null,
     val protocol: Protocol? = null,
     val sinceMs: Long = 0,
+    val blocked: Boolean? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -36,6 +37,7 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
                 country = f.country,
                 protocolNumber = f.protocol?.number,
                 sinceMs = f.sinceMs,
+                blocked = f.blocked,
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

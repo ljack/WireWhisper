@@ -20,6 +20,8 @@ data class FlowRecord(
     var lastSeen: Long = firstSeen,
     var country: String? = null,
     var dnsHostname: String? = null,
+    var blocked: Boolean = false,
+    var blockReason: String? = null,
 ) {
     val dstAddress: InetAddress get() = key.dstAddress
     val dstPort: Int get() = key.dstPort

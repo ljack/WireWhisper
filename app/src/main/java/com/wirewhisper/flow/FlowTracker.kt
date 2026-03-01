@@ -89,6 +89,14 @@ class FlowTracker {
     /** Returns a flow record by key, or null if not tracked. */
     fun getFlow(key: FlowKey): FlowRecord? = flows[key]
 
+    /** Marks a flow as blocked with an optional reason. No-op if already marked. */
+    fun markFlowBlocked(key: FlowKey, reason: String?) {
+        val record = flows[key] ?: return
+        if (record.blocked) return
+        record.blocked = true
+        record.blockReason = reason
+    }
+
     /**
      * Records traffic for sparkline/chart rendering, called after the blocking
      * check so we can distinguish allowed vs blocked bytes.
@@ -152,6 +160,11 @@ class FlowTracker {
     /**
      * Flushes flows that have been idle longer than [FlowRecord.IDLE_TIMEOUT_MS]
      * to the repository for persistent storage.
+     *
+     * Blocked flows are also flushed regardless of idle time — they have no active
+     * relay, so there's no reason to keep them in memory. The blocked app will
+     * likely retry and create a new flow entry, which accumulates until the next
+     * flush cycle. This gives History a stream of blocked-flow entries over time.
      */
     fun flushTimedOut() {
         val repo = repository ?: return
@@ -161,18 +174,27 @@ class FlowTracker {
         val iter = flows.entries.iterator()
         while (iter.hasNext()) {
             val entry = iter.next()
-            if (now - entry.value.lastSeen > FlowRecord.IDLE_TIMEOUT_MS) {
-                toFlush.add(entry.value)
+            val record = entry.value
+            val isIdle = now - record.lastSeen > FlowRecord.IDLE_TIMEOUT_MS
+            if (isIdle || record.blocked) {
+                toFlush.add(record)
                 iter.remove()
             }
         }
 
         if (toFlush.isNotEmpty()) {
             repo.insertBatch(toFlush)
-            Log.d(TAG, "Flushed ${toFlush.size} timed-out flows to repository")
+            Log.d(TAG, "Flushed ${toFlush.size} flows to repository" +
+                " (${toFlush.count { it.blocked }} blocked)")
         }
 
         _activeFlows.value = flows.values.toList()
+    }
+
+    /** Clears all in-memory flows without persisting. */
+    fun clearAll() {
+        flows.clear()
+        _activeFlows.value = emptyList()
     }
 
     /** Flushes all flows to repository. Called when VPN stops. */

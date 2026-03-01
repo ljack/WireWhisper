@@ -29,19 +29,26 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
 import com.wirewhisper.ui.util.formatBytes
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -83,6 +90,9 @@ fun NowScreen(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val groupMode by viewModel.groupMode.collectAsStateWithLifecycle()
     val trafficDetail by viewModel.trafficDetail.collectAsStateWithLifecycle()
+    val timeFilter by viewModel.timeFilter.collectAsStateWithLifecycle()
+    val showBlockedOnly by viewModel.showBlockedOnly.collectAsStateWithLifecycle()
+    val followMode by viewModel.followMode.collectAsStateWithLifecycle()
     var fullscreen by rememberSaveable { mutableStateOf(false) }
 
     val vpnPermissionLauncher = rememberLauncherForActivityResult(
@@ -156,6 +166,15 @@ fun NowScreen(
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        IconButton(onClick = { viewModel.toggleFollowMode() }) {
+                            Icon(
+                                Icons.Default.ArrowUpward,
+                                contentDescription = if (followMode) "Disable follow" else "Follow mode",
+                                modifier = Modifier.size(20.dp),
+                                tint = if (followMode) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         IconButton(onClick = { fullscreen = true }) {
                             Icon(
                                 Icons.Default.Fullscreen,
@@ -242,6 +261,54 @@ fun NowScreen(
                 )
 
                 Spacer(Modifier.height(8.dp))
+
+                // Time filter + blocked filter row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    var showTimeMenu by remember { mutableStateOf(false) }
+                    Box {
+                        FilterChip(
+                            selected = timeFilter != TimeFilter.ALL,
+                            onClick = { showTimeMenu = true },
+                            label = { Text(timeFilter.shortLabel) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Schedule, null, Modifier.size(16.dp))
+                            },
+                        )
+                        DropdownMenu(
+                            expanded = showTimeMenu,
+                            onDismissRequest = { showTimeMenu = false },
+                        ) {
+                            TimeFilter.entries.forEach { filter ->
+                                DropdownMenuItem(
+                                    text = { Text(filter.label) },
+                                    onClick = {
+                                        viewModel.setTimeFilter(filter)
+                                        showTimeMenu = false
+                                    },
+                                    leadingIcon = if (filter == timeFilter) {
+                                        { Icon(Icons.Default.Check, null) }
+                                    } else null,
+                                )
+                            }
+                        }
+                    }
+
+                    FilterChip(
+                        selected = showBlockedOnly,
+                        onClick = { viewModel.toggleShowBlockedOnly() },
+                        label = { Text("Blocked") },
+                        leadingIcon = if (showBlockedOnly) {
+                            { Icon(Icons.Default.Block, null, Modifier.size(16.dp)) }
+                        } else null,
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
             } else {
                 // Fullscreen: minimal header with exit button
                 Row(
@@ -291,12 +358,24 @@ fun NowScreen(
                     GroupMode.BY_APP -> {
                         val listState = rememberLazyListState()
 
-                        // Detect scroll for sort pause/resume
+                        // Detect scroll for sort pause/resume + disable follow on manual scroll
                         LaunchedEffect(listState.isScrollInProgress) {
                             if (listState.isScrollInProgress) {
                                 viewModel.onUserInteractionStarted()
+                                // Disable follow mode when user manually scrolls away from top
+                                if (followMode && listState.firstVisibleItemIndex > 0) {
+                                    viewModel.disableFollowMode()
+                                }
                             } else {
                                 viewModel.onUserInteractionEnded()
+                            }
+                        }
+
+                        // Follow mode: auto-scroll to top when data changes
+                        LaunchedEffect(state.appGroups, followMode) {
+                            if (followMode && state.appGroups.isNotEmpty()
+                                && listState.firstVisibleItemIndex > 0) {
+                                listState.animateScrollToItem(0)
                             }
                         }
 
