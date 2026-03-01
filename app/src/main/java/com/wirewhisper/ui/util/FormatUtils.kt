@@ -16,3 +16,15 @@ fun formatBytesShort(bytes: Long): String = when {
 private val IPV4_PATTERN = Regex("""\d{1,3}(\.\d{1,3}){3}""")
 
 fun isIpv4Address(value: String): Boolean = IPV4_PATTERN.matches(value)
+
+fun formatRelativeTime(timestampMs: Long): String {
+    val delta = System.currentTimeMillis() - timestampMs
+    if (delta < 0) return "now"
+    return when {
+        delta < 10_000 -> "%.1fs".format(delta / 1000.0)
+        delta < 60_000 -> "${delta / 1000}s"
+        delta < 3_600_000 -> "${delta / 60_000}m"
+        delta < 86_400_000 -> "${delta / 3_600_000}h"
+        else -> "${delta / 86_400_000}d"
+    }
+}

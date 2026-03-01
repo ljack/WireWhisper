@@ -266,6 +266,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         val totalSent = flows.sumOf { it.bytesSent }
         val totalReceived = flows.sumOf { it.bytesReceived }
         val distinctCountries = flows.mapNotNull { it.country }.toSet().size
+        val lastActivity = flows.maxOf { it.lastSeen }
 
         // Group flows by UID
         val byUid = flows.groupBy { it.uid }
@@ -318,6 +319,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
             countryCount = distinctCountries,
             totalBytesSent = totalSent,
             totalBytesReceived = totalReceived,
+            lastActivityTime = lastActivity,
         )
     }
 
@@ -334,6 +336,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         val totalSent = flows.sumOf { it.bytesSent }
         val totalReceived = flows.sumOf { it.bytesReceived }
         val distinctApps = flows.map { it.uid }.toSet().size
+        val lastActivity = flows.maxOf { it.lastSeen }
 
         // Group flows by country
         val byCountry = flows.groupBy { it.country ?: "??" }
@@ -410,6 +413,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
             countryCount = byCountry.size,
             totalBytesSent = totalSent,
             totalBytesReceived = totalReceived,
+            lastActivityTime = lastActivity,
         )
     }
 

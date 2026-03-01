@@ -53,6 +53,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import com.wirewhisper.ui.util.formatBytes
+import com.wirewhisper.ui.util.formatRelativeTime
 import com.wirewhisper.ui.util.rememberDrawableBitmap
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -224,7 +225,11 @@ fun NowScreen(
                             onClick = { viewModel.onSortModeChanged(SortMode.RECENT_ACTIVITY) },
                             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                         ) {
-                            Text("Recent")
+                            if (state.lastActivityTime > 0L) {
+                                Text("Recent (${formatRelativeTime(state.lastActivityTime)})", maxLines = 1)
+                            } else {
+                                Text("Recent")
+                            }
                         }
                         SegmentedButton(
                             selected = state.sortMode == SortMode.TOTAL_BYTES,

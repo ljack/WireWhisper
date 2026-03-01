@@ -28,6 +28,7 @@ data class NowUiState(
     val countryCount: Int = 0,
     val totalBytesSent: Long = 0,
     val totalBytesReceived: Long = 0,
+    val lastActivityTime: Long = 0L,
 )
 
 data class AppGroupUiModel(
