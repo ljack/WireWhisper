@@ -59,7 +59,7 @@ class InMemoryGeoResolver(
     companion object {
         private const val TAG = "GeoResolver"
         private const val CACHE_SIZE = 2000
-        private const val API_URL = "http://ip-api.com/json/"
+        private const val API_URL = "https://ipwho.is/"
         private const val API_TIMEOUT_MS = 3000
         private const val DB_CACHE_TTL_MS = 7L * 24 * 60 * 60 * 1000  // 7 days
     }
@@ -214,7 +214,7 @@ class InMemoryGeoResolver(
     private suspend fun lookupOnline(address: InetAddress): GeoResult? =
         withContext(Dispatchers.IO) {
             try {
-                val url = URL("$API_URL${address.hostAddress}?fields=countryCode,country,city,as,org")
+                val url = URL("$API_URL${address.hostAddress}")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.connectTimeout = API_TIMEOUT_MS
                 conn.readTimeout = API_TIMEOUT_MS
@@ -225,14 +225,15 @@ class InMemoryGeoResolver(
                 val body = conn.inputStream.bufferedReader().readText()
                 val json = JSONObject(body)
 
-                if (json.optString("status") == "fail") return@withContext null
+                if (!json.optBoolean("success", false)) return@withContext null
 
+                val connection = json.optJSONObject("connection")
                 GeoResult(
-                    countryCode = json.optString("countryCode", "??"),
-                    countryName = json.optString("country"),
+                    countryCode = json.optString("country_code", "??"),
+                    countryName = json.optString("country").takeIf { it.isNotEmpty() },
                     city = json.optString("city").takeIf { it.isNotEmpty() },
-                    asn = json.optString("as").takeIf { it.isNotEmpty() },
-                    org = json.optString("org").takeIf { it.isNotEmpty() },
+                    asn = connection?.optString("asn")?.takeIf { it.isNotEmpty() },
+                    org = connection?.optString("org")?.takeIf { it.isNotEmpty() },
                 )
             } catch (e: Exception) {
                 Log.d(TAG, "Online geo lookup failed for ${address.hostAddress}", e)
