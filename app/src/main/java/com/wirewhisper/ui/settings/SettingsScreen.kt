@@ -149,6 +149,32 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(16.dp))
 
+        // How to Use section
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
+        ) {
+            ListItem(
+                headlineContent = { Text("How to Use") },
+                supportingContent = {
+                    Text(
+                        "\u2022 Start monitoring: Tap the play button, accept VPN permission\n" +
+                        "\u2022 View traffic: Switch between App/Country views, tap rows to expand, tap sparklines for charts\n" +
+                        "\u2022 Block traffic: Tap the shield icon next to apps, hostnames, or countries\n" +
+                        "\u2022 History: Browse and filter past connections in the History tab\n" +
+                        "\u2022 Privacy: All processing is on-device. Online GeoIP is optional and off by default.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
         // Blocked Countries section
         Card(
             modifier = Modifier
