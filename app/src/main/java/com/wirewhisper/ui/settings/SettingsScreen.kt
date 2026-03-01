@@ -70,7 +70,7 @@ private val countryByCode: Map<String, CountryEntry> by lazy {
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as WireWhisperApp
 
-    private val _geoEnabled = MutableStateFlow(false)
+    private val _geoEnabled = MutableStateFlow(app.geoResolver.onlineLookupEnabled)
     val geoEnabled = _geoEnabled.asStateFlow()
 
     val blockedCountries: StateFlow<Set<String>> = app.blockingEngine.blockedCountriesFlow

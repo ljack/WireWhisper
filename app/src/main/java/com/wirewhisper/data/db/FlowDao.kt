@@ -15,18 +15,6 @@ interface FlowDao {
     @Query("SELECT * FROM flows ORDER BY lastSeen DESC")
     fun getAllFlows(): Flow<List<FlowEntity>>
 
-    @Query("SELECT * FROM flows WHERE packageName = :packageName ORDER BY lastSeen DESC")
-    fun getFlowsByApp(packageName: String): Flow<List<FlowEntity>>
-
-    @Query("SELECT * FROM flows WHERE country = :country ORDER BY lastSeen DESC")
-    fun getFlowsByCountry(country: String): Flow<List<FlowEntity>>
-
-    @Query("SELECT * FROM flows WHERE protocol = :protocol ORDER BY lastSeen DESC")
-    fun getFlowsByProtocol(protocol: Int): Flow<List<FlowEntity>>
-
-    @Query("SELECT * FROM flows WHERE lastSeen >= :sinceMs ORDER BY lastSeen DESC")
-    fun getFlowsSince(sinceMs: Long): Flow<List<FlowEntity>>
-
     @Query("""
         SELECT * FROM flows
         WHERE (:packageName IS NULL OR packageName = :packageName)

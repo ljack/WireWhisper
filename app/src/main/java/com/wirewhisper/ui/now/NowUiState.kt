@@ -3,9 +3,6 @@ package com.wirewhisper.ui.now
 import android.graphics.drawable.Drawable
 import com.wirewhisper.flow.TrafficSample
 
-/** Whether the Now screen shows full chrome (header, toggles, search) or just the list. */
-enum class ScreenMode { NORMAL, FULLSCREEN }
-
 enum class GroupMode { BY_APP, BY_COUNTRY }
 
 enum class SortMode { RECENT_ACTIVITY, TOTAL_BYTES }

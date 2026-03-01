@@ -17,6 +17,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wirewhisper.flow.TrafficSample
+import com.wirewhisper.ui.util.formatBytesShort
 
 @Composable
 fun TrafficChart(
@@ -172,8 +173,3 @@ private fun DrawScope.drawAxisLabel(
     drawText(textLayoutResult = measured, topLeft = Offset(x, y))
 }
 
-internal fun formatBytesShort(bytes: Long): String = when {
-    bytes < 1024 -> "${bytes}B"
-    bytes < 1024 * 1024 -> "${bytes / 1024}KB"
-    else -> "${bytes / (1024 * 1024)}MB"
-}

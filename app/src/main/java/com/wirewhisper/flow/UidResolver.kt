@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.util.Log
 import com.wirewhisper.core.model.AppInfo
-import com.wirewhisper.core.model.FlowRecord
 import com.wirewhisper.core.model.PacketInfo
 import com.wirewhisper.core.model.Protocol
 import java.io.BufferedReader
@@ -43,6 +42,7 @@ class UidResolver(private val context: Context) {
         private const val TAG = "UidResolver"
         private const val UID_SYSTEM = 1000
         private const val UID_ROOT = 0
+        private val WHITESPACE_REGEX = "\\s+".toRegex()
     }
 
     private val connectivityManager by lazy {
@@ -52,21 +52,6 @@ class UidResolver(private val context: Context) {
 
     // Cache: UID → AppInfo
     private val uidCache = ConcurrentHashMap<Int, AppInfo>()
-
-    /**
-     * Best-effort UID resolution for a parsed packet.
-     * Updates the [FlowTracker] with the result.
-     */
-    fun resolve(info: PacketInfo) {
-        if (info.protocol != Protocol.TCP && info.protocol != Protocol.UDP) return
-
-        val uid = resolveUid(info)
-        if (uid < 0) return
-
-        val appInfo = resolveAppInfo(uid)
-        // The caller (TunProcessor) will enrich the flow via FlowTracker
-        // For now, we do it inline since FlowTracker is accessible
-    }
 
     /**
      * Resolves UID and enriches the flow in the given [FlowTracker].
@@ -134,7 +119,7 @@ class UidResolver(private val context: Context) {
                 reader.readLine() // skip header
                 var line = reader.readLine()
                 while (line != null) {
-                    val parts = line.trim().split("\\s+".toRegex())
+                    val parts = line.trim().split(WHITESPACE_REGEX)
                     if (parts.size >= 8) {
                         val localAddr = parts[1]
                         val port = localAddr.substringAfterLast(':')

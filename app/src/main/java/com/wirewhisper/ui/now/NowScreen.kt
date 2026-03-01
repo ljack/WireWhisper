@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
+import com.wirewhisper.ui.util.formatBytes
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -732,13 +733,6 @@ private fun rememberDrawableBitmap(drawable: Drawable?): ImageBitmap? {
     return remember(drawable) {
         drawable?.toBitmap(64, 64)?.asImageBitmap()
     }
-}
-
-internal fun formatBytes(bytes: Long): String = when {
-    bytes < 1024 -> "$bytes B"
-    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-    bytes < 1024L * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
-    else -> "${bytes / (1024L * 1024 * 1024)} GB"
 }
 
 // endregion

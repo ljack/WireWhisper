@@ -43,10 +43,10 @@ data class GeoResult(
  * 2. Built-in heuristics for private/loopback ranges (instant)
  * 3. Offline binary DB — instant IPv4 country lookup (no network)
  * 4. Room database cache (fast, survives restarts)
- * 5. Online lookup via ip-api.com (slow, rate-limited)
+ * 5. Online lookup via ipwho.is (slow, rate-limited)
  *
  * ### Privacy note
- * When [onlineLookupEnabled] is true, destination IPs are sent to ip-api.com.
+ * When [onlineLookupEnabled] is true, destination IPs are sent to ipwho.is.
  * This is gated behind a user toggle in Settings. When disabled, the offline
  * DB still provides country-level resolution for all public IPv4 addresses.
  */

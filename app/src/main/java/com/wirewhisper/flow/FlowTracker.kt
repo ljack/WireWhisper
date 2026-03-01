@@ -111,15 +111,7 @@ class FlowTracker {
                 uid = uid,
                 packageName = packageName,
                 appName = appName,
-            ).also { updated ->
-                updated.bytesSent = record.bytesSent
-                updated.bytesReceived = record.bytesReceived
-                updated.packetsSent = record.packetsSent
-                updated.packetsReceived = record.packetsReceived
-                updated.lastSeen = record.lastSeen
-                updated.country = record.country
-                updated.dnsHostname = record.dnsHostname
-            }
+            )
         }
     }
 
@@ -140,6 +132,19 @@ class FlowTracker {
         for ((key, record) in flows) {
             if (key.dstAddress == address && record.dnsHostname == null) {
                 record.dnsHostname = hostname
+            }
+        }
+    }
+
+    /**
+     * Retroactively enriches all active flows whose destination matches [address]
+     * with the given country code. Called after a geo lookup completes so that
+     * all flows to the same IP get the country, not just the triggering flow.
+     */
+    fun enrichFlowsGeoByAddress(address: java.net.InetAddress, country: String) {
+        for ((key, record) in flows) {
+            if (key.dstAddress == address && record.country == null) {
+                record.country = country
             }
         }
     }

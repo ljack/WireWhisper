@@ -169,18 +169,13 @@ class TunProcessor(
                     try {
                         val geo = geoResolver.resolve(dstAddr)
                         if (geo != null) {
-                            flowTracker.enrichFlowGeo(flowKey, country = geo.countryCode, hostname = null)
+                            flowTracker.enrichFlowsGeoByAddress(dstAddr, geo.countryCode)
                         }
                     } catch (e: Exception) {
                         Log.d(TAG, "Geo resolve failed for ${dstAddr.hostAddress}", e)
+                    } finally {
+                        geoResolvingIps.remove(dstAddr)
                     }
-                }
-            }
-            if (info.protocol == Protocol.UDP && info.dstPort == 53) {
-                val dnsPayloadOffset = info.ipHeaderLength + UdpHeader_LENGTH
-                if (dnsPayloadOffset < length) {
-                    val dnsBuf = ByteBuffer.wrap(packet.array(), dnsPayloadOffset, length - dnsPayloadOffset)
-                    hostnameResolver.onDnsQuery(dnsBuf)
                 }
             }
         } catch (e: Exception) {
@@ -708,7 +703,7 @@ class TunProcessor(
         val checksumPos = 10
         var sum = 0L
         for (i in 0 until ipHeaderLen step 2) {
-            sum += (packet.get(i).toInt() and 0xFF shl 8) or (packet.get(i + 1).toInt() and 0xFF)
+            sum += ((packet.get(i).toInt() and 0xFF) shl 8) or (packet.get(i + 1).toInt() and 0xFF)
         }
         while (sum shr 16 != 0L) sum = (sum and 0xFFFF) + (sum shr 16)
         val checksum = sum.inv().toInt() and 0xFFFF

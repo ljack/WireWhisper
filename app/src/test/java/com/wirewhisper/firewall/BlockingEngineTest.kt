@@ -24,15 +24,6 @@ class BlockingEngineTest {
 
         override suspend fun getAllRulesOnce(): List<BlockRuleEntity> = rules.toList()
 
-        override suspend fun getAppRule(packageName: String): BlockRuleEntity? =
-            rules.firstOrNull { it.packageName == packageName && it.hostname == null && it.countryCode == null }
-
-        override suspend fun getHostnameRule(packageName: String, hostname: String): BlockRuleEntity? =
-            rules.firstOrNull { it.packageName == packageName && it.hostname == hostname }
-
-        override suspend fun getCountryRule(countryCode: String): BlockRuleEntity? =
-            rules.firstOrNull { it.countryCode == countryCode && it.packageName == null }
-
         override suspend fun insert(rule: BlockRuleEntity) {
             rules.add(rule)
         }

@@ -31,27 +31,12 @@ class HostnameResolver(
         val response = DnsParser.parseResponse(payload) ?: return
         val now = System.currentTimeMillis()
 
-        // First pass: collect CNAME chains
-        val cnameMap = mutableMapOf<String, String>()
-        for (answer in response.answers) {
-            if (answer.cname != null) {
-                cnameMap[answer.cname.lowercase()] = answer.name.lowercase()
-            }
-        }
-
-        // Second pass: cache A/AAAA records with resolved names
         for (answer in response.answers) {
             val addr = answer.address ?: continue
-            // Walk CNAME chain to find the original query name
-            var hostname = answer.name.lowercase()
-            var depth = 0
-            while (cnameMap.containsKey(hostname) && depth < 8) {
-                hostname = cnameMap[hostname]!!
-                depth++
-            }
-            // Prefer the query name if it's a direct match
-            if (response.queryName.isNotEmpty()) {
-                hostname = response.queryName.lowercase()
+            val hostname = if (response.queryName.isNotEmpty()) {
+                response.queryName.lowercase()
+            } else {
+                answer.name.lowercase()
             }
 
             val ttlMs = (answer.ttl * 1000).coerceAtLeast(60_000)
@@ -61,11 +46,6 @@ class HostnameResolver(
             // Retroactively enrich any active flows to this IP
             flowTracker.enrichFlowsByAddress(addr, hostname)
         }
-    }
-
-    fun onDnsQuery(payload: ByteBuffer) {
-        // Parse for logging/debugging, no cache update needed
-        DnsParser.parseQuery(payload)
     }
 
     fun onTlsClientHello(flowKey: FlowKey, payload: ByteBuffer) {

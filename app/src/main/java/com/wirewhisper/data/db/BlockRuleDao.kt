@@ -13,15 +13,6 @@ interface BlockRuleDao {
     @Query("SELECT * FROM block_rules")
     suspend fun getAllRulesOnce(): List<BlockRuleEntity>
 
-    @Query("SELECT * FROM block_rules WHERE packageName = :packageName AND hostname IS NULL AND countryCode IS NULL LIMIT 1")
-    suspend fun getAppRule(packageName: String): BlockRuleEntity?
-
-    @Query("SELECT * FROM block_rules WHERE packageName = :packageName AND hostname = :hostname LIMIT 1")
-    suspend fun getHostnameRule(packageName: String, hostname: String): BlockRuleEntity?
-
-    @Query("SELECT * FROM block_rules WHERE countryCode = :countryCode AND packageName IS NULL LIMIT 1")
-    suspend fun getCountryRule(countryCode: String): BlockRuleEntity?
-
     @Insert
     suspend fun insert(rule: BlockRuleEntity)
 

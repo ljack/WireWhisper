@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.wirewhisper.WireWhisperApp
+import com.wirewhisper.data.db.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -55,8 +56,15 @@ class GeoDbRefreshWorker(
             val tempFile = File(applicationContext.cacheDir, "$DB_FILENAME.tmp")
             val targetFile = File(applicationContext.filesDir, DB_FILENAME)
             tempFile.writeBytes(binary)
-            tempFile.renameTo(targetFile)
+            if (!tempFile.renameTo(targetFile)) {
+                tempFile.copyTo(targetFile, overwrite = true)
+                tempFile.delete()
+            }
             Log.i(TAG, "Wrote ${targetFile.absolutePath} (${merged.size} entries)")
+
+            // Evict stale geo cache entries (older than 30 days)
+            val thirtyDaysAgo = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+            AppDatabase.getInstance(applicationContext).geoCacheDao().evictOlderThan(thirtyDaysAgo)
 
             // Hot-swap into the resolver
             val app = applicationContext as? WireWhisperApp
