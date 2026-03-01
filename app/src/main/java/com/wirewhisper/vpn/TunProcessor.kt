@@ -261,7 +261,7 @@ class TunProcessor(
             while (iter.hasNext()) {
                 val key = iter.next()
                 iter.remove()
-                if (!key.isReadable) continue
+                if (!key.isValid || !key.isReadable) continue
 
                 val session = key.attachment() as UdpSession
                 responseBuffer.clear()
@@ -506,6 +506,7 @@ class TunProcessor(
             while (udpIter.hasNext()) {
                 val entry = udpIter.next()
                 if (now - entry.value.lastActive > UDP_IDLE_TIMEOUT_MS) {
+                    entry.value.selectionKey?.cancel()
                     entry.value.channel.close()
                     udpIter.remove()
                 }

@@ -3,7 +3,6 @@ package com.wirewhisper.ui.watchlist
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import com.wirewhisper.WireWhisperApp
-import com.wirewhisper.ui.util.isIpv4Address
 import com.wirewhisper.watchlist.WatchlistEntry
 import kotlinx.coroutines.flow.StateFlow
 
@@ -15,22 +14,16 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
     val entries: StateFlow<List<WatchlistEntry>> = engine.entries
 
     fun addEntry(value: String, label: String? = null) {
-        val normalized = value.lowercase().trim()
-        val type = if (isIpv4Address(normalized)) "ip" else "hostname"
-        engine.addEntry(type, normalized, label)
+        engine.addEntry(value, label)
     }
 
     fun addEntries(lines: String) {
-        val entries = lines.lines()
+        val values = lines.lines()
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .map { extractHostname(it) }
             .filter { it.isNotBlank() }
-            .map { normalized ->
-                val type = if (isIpv4Address(normalized)) "ip" else "hostname"
-                type to normalized
-            }
-        engine.addEntriesBatch(entries)
+        engine.addEntriesBatch(values)
     }
 
     fun removeEntry(id: Long) {

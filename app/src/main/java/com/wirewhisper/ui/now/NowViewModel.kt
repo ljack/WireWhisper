@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import com.wirewhisper.ui.util.countryCodeToFlag
 import com.wirewhisper.ui.util.countryDisplayName
-import com.wirewhisper.ui.util.isIpv4Address
 
 class NowViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -57,6 +56,10 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
     private val _showBlockedOnly = MutableStateFlow(false)
     val showBlockedOnly: StateFlow<Boolean> = _showBlockedOnly
 
+    // Watched-only filter
+    private val _showWatchedOnly = MutableStateFlow(false)
+    val showWatchedOnly: StateFlow<Boolean> = _showWatchedOnly
+
     // Follow mode (auto-scroll to top)
     private val _followMode = MutableStateFlow(false)
     val followMode: StateFlow<Boolean> = _followMode
@@ -79,6 +82,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         _frozenOrder,
         _timeFilter,
         _showBlockedOnly,
+        _showWatchedOnly,
     ) { values ->
         val flows = values[0] as List<FlowRecord>
         val expanded = values[1] as Set<Int>
@@ -92,12 +96,13 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         val frozenOrder = values[9] as List<Int>?
         val timeFilter = values[10] as TimeFilter
         val blockedOnly = values[11] as Boolean
+        val watchedOnly = values[12] as Boolean
 
         val filteredFlows = applyTimeFilter(flows, timeFilter)
 
         when (mode) {
-            GroupMode.BY_APP -> buildAppUiState(filteredFlows, expanded, query, sortMode, paused, frozenOrder, blockedOnly)
-            GroupMode.BY_COUNTRY -> buildCountryUiState(filteredFlows, query, expandedC, expandedCA, blockedOnly)
+            GroupMode.BY_APP -> buildAppUiState(filteredFlows, expanded, query, sortMode, paused, frozenOrder, blockedOnly, watchedOnly)
+            GroupMode.BY_COUNTRY -> buildCountryUiState(filteredFlows, query, expandedC, expandedCA, blockedOnly, watchedOnly)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NowUiState())
 
@@ -122,6 +127,10 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleShowBlockedOnly() {
         _showBlockedOnly.value = !_showBlockedOnly.value
+    }
+
+    fun toggleShowWatchedOnly() {
+        _showWatchedOnly.value = !_showWatchedOnly.value
     }
 
     fun toggleFollowMode() {
@@ -249,8 +258,14 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         paused: Boolean = false,
         frozenOrder: List<Int>? = null,
         blockedOnly: Boolean = false,
+        watchedOnly: Boolean = false,
     ): NowUiState {
         if (flows.isEmpty()) return NowUiState(groupMode = GroupMode.BY_APP, sortMode = sortMode)
+
+        // Aggregate stats from time-filtered flows
+        val totalSent = flows.sumOf { it.bytesSent }
+        val totalReceived = flows.sumOf { it.bytesReceived }
+        val distinctCountries = flows.mapNotNull { it.country }.toSet().size
 
         // Group flows by UID
         val byUid = flows.groupBy { it.uid }
@@ -259,8 +274,15 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
             buildAppGroupModel(uid, uidFlows, uid in expanded)
         }
 
+        val blockedCount = groups.count { it.isBlocked }
+        val watchedCount = groups.count { group -> group.hostnames.any { it.isWatched } }
+
         if (blockedOnly) {
             groups = groups.filter { it.isBlocked }
+        }
+
+        if (watchedOnly) {
+            groups = groups.filter { group -> group.hostnames.any { it.isWatched } }
         }
 
         // Apply sorting
@@ -290,6 +312,12 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
             sortMode = sortMode,
             appGroups = groups,
             totalActiveFlows = flows.size,
+            blockedAppCount = blockedCount,
+            watchedAppCount = watchedCount,
+            appCount = byUid.size,
+            countryCount = distinctCountries,
+            totalBytesSent = totalSent,
+            totalBytesReceived = totalReceived,
         )
     }
 
@@ -299,8 +327,13 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         expandedC: Set<String>,
         expandedCA: Set<String>,
         blockedOnly: Boolean = false,
+        watchedOnly: Boolean = false,
     ): NowUiState {
         if (flows.isEmpty()) return NowUiState(groupMode = GroupMode.BY_COUNTRY)
+
+        val totalSent = flows.sumOf { it.bytesSent }
+        val totalReceived = flows.sumOf { it.bytesReceived }
+        val distinctApps = flows.map { it.uid }.toSet().size
 
         // Group flows by country
         val byCountry = flows.groupBy { it.country ?: "??" }
@@ -340,8 +373,19 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
             )
         }.sortedWith(compareByDescending<CountryGroupUiModel> { it.countryCode != "??" }.thenByDescending { it.totalBytes })
 
+        val blockedCount = groups.count { it.isBlocked }
+        val watchedCount = groups.count { group ->
+            group.apps.any { app -> app.hostnames.any { it.isWatched } }
+        }
+
         if (blockedOnly) {
             groups = groups.filter { it.isBlocked }
+        }
+
+        if (watchedOnly) {
+            groups = groups.filter { group ->
+                group.apps.any { app -> app.hostnames.any { it.isWatched } }
+            }
         }
 
         if (query.isNotBlank()) {
@@ -360,6 +404,12 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
             groupMode = GroupMode.BY_COUNTRY,
             countryGroups = groups,
             totalActiveFlows = flows.size,
+            blockedAppCount = blockedCount,
+            watchedAppCount = watchedCount,
+            appCount = distinctApps,
+            countryCount = byCountry.size,
+            totalBytesSent = totalSent,
+            totalBytesReceived = totalReceived,
         )
     }
 
@@ -403,7 +453,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
                     isBlocked = packageName != null && app.blockingEngine.isBlocked(packageName, hostname),
                     parentAppBlocked = appBlocked,
                     blockedAttemptCount = if (packageName != null) app.blockingEngine.getHostnameBlockedCount(packageName, hostname) else 0,
-                    isWatched = app.watchlistEngine.isWatched(hostname, ip),
+                    isWatched = app.watchlistEngine.isWatched(hostname.lowercase(), ip),
                 )
             }
             .sortedByDescending { it.totalBytes }
@@ -424,8 +474,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun watchDestination(hostname: String) {
-        val type = if (isIpv4Address(hostname)) "ip" else "hostname"
-        app.watchlistEngine.addEntry(type, hostname)
+        app.watchlistEngine.addEntry(hostname)
     }
 
     fun unwatchDestination(hostname: String) {

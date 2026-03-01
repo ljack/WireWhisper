@@ -22,6 +22,12 @@ data class NowUiState(
     val appGroups: List<AppGroupUiModel> = emptyList(),
     val countryGroups: List<CountryGroupUiModel> = emptyList(),
     val totalActiveFlows: Int = 0,
+    val blockedAppCount: Int = 0,
+    val watchedAppCount: Int = 0,
+    val appCount: Int = 0,
+    val countryCount: Int = 0,
+    val totalBytesSent: Long = 0,
+    val totalBytesReceived: Long = 0,
 )
 
 data class AppGroupUiModel(

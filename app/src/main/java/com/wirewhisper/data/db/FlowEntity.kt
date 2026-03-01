@@ -23,6 +23,8 @@ import java.net.InetAddress
         Index("lastSeen"),
         Index("protocol"),
         Index("blocked"),
+        Index("dstAddress"),
+        Index("dnsHostname"),
     ]
 )
 data class FlowEntity(

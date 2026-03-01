@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 6,
-    "identityHash": "0e87085df52bc3c2f47f6eb7f3bafc6e",
+    "identityHash": "b895886e92eb2ae7b1102cb81b49d406",
     "entities": [
       {
         "tableName": "flows",
@@ -169,6 +169,24 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_flows_blocked` ON `${TABLE_NAME}` (`blocked`)"
+          },
+          {
+            "name": "index_flows_dstAddress",
+            "unique": false,
+            "columnNames": [
+              "dstAddress"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_flows_dstAddress` ON `${TABLE_NAME}` (`dstAddress`)"
+          },
+          {
+            "name": "index_flows_dnsHostname",
+            "unique": false,
+            "columnNames": [
+              "dnsHostname"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_flows_dnsHostname` ON `${TABLE_NAME}` (`dnsHostname`)"
           }
         ]
       },
@@ -345,7 +363,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0e87085df52bc3c2f47f6eb7f3bafc6e')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b895886e92eb2ae7b1102cb81b49d406')"
     ]
   }
 }

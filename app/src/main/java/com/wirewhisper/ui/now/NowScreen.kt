@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -92,6 +93,7 @@ fun NowScreen(
     val trafficDetail by viewModel.trafficDetail.collectAsStateWithLifecycle()
     val timeFilter by viewModel.timeFilter.collectAsStateWithLifecycle()
     val showBlockedOnly by viewModel.showBlockedOnly.collectAsStateWithLifecycle()
+    val showWatchedOnly by viewModel.showWatchedOnly.collectAsStateWithLifecycle()
     val followMode by viewModel.followMode.collectAsStateWithLifecycle()
     var fullscreen by rememberSaveable { mutableStateOf(false) }
 
@@ -112,6 +114,7 @@ fun NowScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         floatingActionButton = {
             if (!fullscreen) {
                 ExtendedFloatingActionButton(
@@ -172,7 +175,7 @@ fun NowScreen(
                                 contentDescription = if (followMode) "Disable follow" else "Follow mode",
                                 modifier = Modifier.size(20.dp),
                                 tint = if (followMode) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                else MaterialTheme.colorScheme.outline,
                             )
                         }
                         IconButton(onClick = { fullscreen = true }) {
@@ -196,14 +199,14 @@ fun NowScreen(
                         onClick = { viewModel.onGroupModeChanged(GroupMode.BY_APP) },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                     ) {
-                        Text("App")
+                        Text(if (state.appCount > 0) "App (${state.appCount})" else "App")
                     }
                     SegmentedButton(
                         selected = groupMode == GroupMode.BY_COUNTRY,
                         onClick = { viewModel.onGroupModeChanged(GroupMode.BY_COUNTRY) },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                     ) {
-                        Text("Country")
+                        Text(if (state.countryCount > 0) "Country (${state.countryCount})" else "Country")
                     }
                 }
 
@@ -228,7 +231,13 @@ fun NowScreen(
                             onClick = { viewModel.onSortModeChanged(SortMode.TOTAL_BYTES) },
                             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                         ) {
-                            Text("Bytes")
+                            val sent = state.totalBytesSent
+                            val recv = state.totalBytesReceived
+                            if (sent + recv > 0) {
+                                Text("\u2191${formatBytes(sent)} \u2193${formatBytes(recv)}", maxLines = 1)
+                            } else {
+                                Text("Bytes")
+                            }
                         }
                     }
                     Spacer(Modifier.height(8.dp))
@@ -301,9 +310,24 @@ fun NowScreen(
                     FilterChip(
                         selected = showBlockedOnly,
                         onClick = { viewModel.toggleShowBlockedOnly() },
-                        label = { Text("Blocked") },
+                        label = {
+                            val count = state.blockedAppCount
+                            Text(if (count > 0) "Blocked ($count)" else "Blocked")
+                        },
                         leadingIcon = if (showBlockedOnly) {
                             { Icon(Icons.Default.Block, null, Modifier.size(16.dp)) }
+                        } else null,
+                    )
+
+                    FilterChip(
+                        selected = showWatchedOnly,
+                        onClick = { viewModel.toggleShowWatchedOnly() },
+                        label = {
+                            val count = state.watchedAppCount
+                            Text(if (count > 0) "Watched ($count)" else "Watched")
+                        },
+                        leadingIcon = if (showWatchedOnly) {
+                            { Icon(Icons.Default.Visibility, null, Modifier.size(16.dp)) }
                         } else null,
                     )
                 }
@@ -324,6 +348,15 @@ fun NowScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f).padding(start = 8.dp),
                     )
+                    IconButton(onClick = { viewModel.toggleFollowMode() }) {
+                        Icon(
+                            Icons.Default.ArrowUpward,
+                            contentDescription = if (followMode) "Disable follow" else "Follow mode",
+                            modifier = Modifier.size(20.dp),
+                            tint = if (followMode) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outline,
+                        )
+                    }
                     IconButton(onClick = { fullscreen = false }) {
                         Icon(
                             Icons.Default.FullscreenExit,
@@ -357,17 +390,22 @@ fun NowScreen(
                 when (groupMode) {
                     GroupMode.BY_APP -> {
                         val listState = rememberLazyListState()
+                        var programmaticScroll by remember { mutableStateOf(false) }
 
                         // Detect scroll for sort pause/resume + disable follow on manual scroll
                         LaunchedEffect(listState.isScrollInProgress) {
                             if (listState.isScrollInProgress) {
-                                viewModel.onUserInteractionStarted()
-                                // Disable follow mode when user manually scrolls away from top
-                                if (followMode && listState.firstVisibleItemIndex > 0) {
-                                    viewModel.disableFollowMode()
+                                if (!programmaticScroll) {
+                                    viewModel.onUserInteractionStarted()
+                                    if (followMode && listState.firstVisibleItemIndex > 0) {
+                                        viewModel.disableFollowMode()
+                                    }
                                 }
                             } else {
-                                viewModel.onUserInteractionEnded()
+                                if (!programmaticScroll) {
+                                    viewModel.onUserInteractionEnded()
+                                }
+                                programmaticScroll = false
                             }
                         }
 
@@ -375,6 +413,7 @@ fun NowScreen(
                         LaunchedEffect(state.appGroups, followMode) {
                             if (followMode && state.appGroups.isNotEmpty()
                                 && listState.firstVisibleItemIndex > 0) {
+                                programmaticScroll = true
                                 listState.animateScrollToItem(0)
                             }
                         }

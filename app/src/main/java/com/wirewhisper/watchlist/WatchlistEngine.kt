@@ -2,6 +2,7 @@ package com.wirewhisper.watchlist
 
 import com.wirewhisper.data.db.WatchlistDao
 import com.wirewhisper.data.db.WatchlistEntryEntity
+import com.wirewhisper.ui.util.isIpv4Address
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,14 +47,21 @@ class WatchlistEngine(
         emitEntries(all)
     }
 
+    /** Values are stored normalized (lowercased), so callers should pass lowercased input for matching. */
     fun isWatched(hostname: String?, ip: String?): Boolean {
-        if (hostname != null && hostname.lowercase() in watchedHostnames) return true
+        if (hostname != null && hostname in watchedHostnames) return true
         if (ip != null && ip in watchedIps) return true
         return false
     }
 
-    /** Callers must normalize (lowercase/trim) the value before calling. */
-    fun addEntry(type: String, value: String, label: String? = null) {
+    /** Add a watchlist entry. Value is automatically normalized (lowercased/trimmed). Type is inferred from the value. */
+    fun addEntry(value: String, label: String? = null) {
+        val normalized = value.lowercase().trim()
+        val type = if (isIpv4Address(normalized)) "ip" else "hostname"
+        addEntryInternal(type, normalized, label)
+    }
+
+    private fun addEntryInternal(type: String, value: String, label: String?) {
         scope.launch {
             val id = dao.insert(
                 WatchlistEntryEntity(type = type, value = value, label = label)
@@ -65,15 +73,17 @@ class WatchlistEngine(
         }
     }
 
-    /** Batch insert with a single refresh at the end. */
-    fun addEntriesBatch(entries: List<Pair<String, String>>) {
+    /** Batch insert with a single refresh at the end. Values are normalized internally. */
+    fun addEntriesBatch(values: List<String>) {
         scope.launch {
-            for ((type, value) in entries) {
+            for (raw in values) {
+                val normalized = raw.lowercase().trim()
+                val type = if (isIpv4Address(normalized)) "ip" else "hostname"
                 val id = dao.insert(
-                    WatchlistEntryEntity(type = type, value = value)
+                    WatchlistEntryEntity(type = type, value = normalized)
                 )
                 if (id != -1L) {
-                    addToSets(type, value)
+                    addToSets(type, normalized)
                 }
             }
             refreshEntries()
