@@ -81,6 +81,7 @@ class FlowTrackerTest {
     @Test
     fun `onPacket different keys create separate records`() {
         tracker.onPacket(makePacketInfo(dstPort = 443), outgoing = true)
+        Thread.sleep(501) // wait for snapshot debounce
         tracker.onPacket(makePacketInfo(dstPort = 80), outgoing = true)
         val flows = tracker.activeFlows.value
         assertEquals(2, flows.size)
@@ -113,7 +114,8 @@ class FlowTrackerTest {
         tracker.enrichFlow(key, uid = 10042, packageName = "com.example.app", appName = "Example")
         val flow = tracker.activeFlows.value.find { it.key == key }
         // enrichFlow uses computeIfPresent; check after next snapshot
-        // Force snapshot via another packet
+        // Force snapshot via another packet (wait for debounce first)
+        Thread.sleep(501)
         tracker.onPacket(makePacketInfo(dstPort = 9999), outgoing = true)
         val enriched = tracker.activeFlows.value.find { it.key == key }!!
         assertEquals(10042, enriched.uid)
@@ -195,6 +197,7 @@ class FlowTrackerTest {
         val repo = InMemoryFlowRepository()
         tracker.repository = repo
         tracker.onPacket(makePacketInfo(dstPort = 443), outgoing = true)
+        Thread.sleep(501) // wait for snapshot debounce
         tracker.onPacket(makePacketInfo(dstPort = 80), outgoing = true)
         assertEquals(2, tracker.activeFlows.value.size)
         tracker.flushAll()
