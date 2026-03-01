@@ -42,15 +42,20 @@ jobs:
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
 
+      - name: Rename APK
+        run: |
+          VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          mv app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/wirewhisper-${VERSION}.apk"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: wirewhisper-release
-          path: app/build/outputs/apk/release/*.apk
+          path: app/build/outputs/apk/release/wirewhisper-*.apk
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/*.apk
+          files: app/build/outputs/apk/release/wirewhisper-*.apk
           generate_release_notes: true

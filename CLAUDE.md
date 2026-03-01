@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build debug APK
 ./gradlew assembleDebug
 
-# Build release APK (requires keystore env vars: KEYSTORE_BASE64, KEY_ALIAS, KEY_PASSWORD, STORE_PASSWORD)
+# Build release APK (requires keystore env vars: KEYSTORE_BASE64, KEY_ALIAS, KEY_PASSWORD, KEYSTORE_PASSWORD)
 ./gradlew assembleRelease
 
 # Run all unit tests
@@ -37,7 +37,7 @@ App traffic → TUN fd → TunProcessor.readLoop()
   → PacketParser.parse() → PacketInfo
   → FlowTracker.onPacket() (ConcurrentHashMap, 500ms debounced StateFlow)
   → UidResolver.resolveAndEnrich() (ConnectivityManager primary, /proc/net fallback)
-  → GeoResolver (LRU cache → heuristics → offline binary DB → Room cache → ip-api.com)
+  → GeoResolver (LRU cache → heuristics → offline binary DB → Room cache → ipwho.is)
   → BlockingEngine.isBlocked() (O(1) concurrent set lookups)
   → UDP relay (DatagramChannel + Selector) or TCP relay (SocketChannel proxy with full state machine)
 ```
@@ -50,7 +50,7 @@ App traffic → TUN fd → TunProcessor.readLoop()
 - **`geo/`** — `GeoResolver` interface + `InMemoryGeoResolver` (5-tier lookup), `OfflineGeoLookup` (binary search on custom GEO1 format), `GeoDbRefreshWorker`
 - **`firewall/`** — `BlockingEngine` (in-memory sets backed by Room, supports app/hostname/country blocking)
 - **`data/`** — Room database (`AppDatabase` v4), entities, DAOs, repository pattern
-- **`ui/`** — Jetpack Compose with Material 3. Screens: now (live flows), history, detail, settings. Type-safe navigation via kotlinx.serialization routes.
+- **`ui/`** — Jetpack Compose with Material 3. Screens: now (live flows), history, detail, settings. Type-safe navigation via kotlinx.serialization routes. Shared utilities in `ui/util/` (e.g., `CountryUtils.kt`).
 
 ### Critical Implementation Details
 
@@ -69,8 +69,15 @@ App traffic → TUN fd → TunProcessor.readLoop()
 
 ### Tech Stack
 
-- AGP 9.0.1 / Kotlin 2.0.21 / Compose BOM 2025.05.00
+- AGP 9.0.1 / Gradle 9.2 / Kotlin 2.0.21 / Compose BOM 2025.05.00
 - Target & Min SDK 36 (Android 16)
 - Room 2.7.1 with KSP 2.0.21-1.0.28
 - Navigation Compose 2.9.0 (type-safe with kotlinx.serialization)
 - Java 17 source/target compatibility
+
+### AGP 9 / Gradle 9 Notes
+
+- **No `applicationVariants`** — the old variant API (`android.applicationVariants.all { }`) is removed. Use `androidComponents.onVariants { }` for new variant API, but `outputFileName` is not available there. APK renaming is handled in CI instead.
+- **No `archivesBaseName`** — removed in Gradle 9. Don't use `project.setProperty("archivesBaseName", ...)`.
+- **No `BuildConfig` by default** — must opt in with `buildFeatures { buildConfig = true }` if needed.
+- **Lint crash** — `checkReleaseBuilds = false` is required due to an AGP 9.0.1 crash on build script analysis.
