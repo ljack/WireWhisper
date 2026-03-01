@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material3.AlertDialog
@@ -50,6 +51,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wirewhisper.WireWhisperApp
 import com.wirewhisper.ui.util.countryCodeToFlag
 import com.wirewhisper.ui.util.countryDisplayName
+import com.wirewhisper.watchlist.WatchlistEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -81,6 +83,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val geoEnabled = _geoEnabled.asStateFlow()
 
     val blockedCountries: StateFlow<Set<String>> = app.blockingEngine.blockedCountriesFlow
+    val watchlistEntries: StateFlow<List<WatchlistEntry>> = app.watchlistEngine.entries
 
     fun setGeoEnabled(enabled: Boolean) {
         _geoEnabled.value = enabled
@@ -106,10 +109,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
+    onNavigateToWatchlist: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(),
 ) {
     val geoEnabled by viewModel.geoEnabled.collectAsStateWithLifecycle()
     val blockedCountries by viewModel.blockedCountries.collectAsStateWithLifecycle()
+    val watchlistEntries by viewModel.watchlistEntries.collectAsStateWithLifecycle()
     val resetInProgress by viewModel.resetInProgress.collectAsStateWithLifecycle()
     var showCountryPicker by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
@@ -188,6 +193,36 @@ fun SettingsScreen(
                         "\u2022 History: Browse and filter past connections in the History tab\n" +
                         "\u2022 Privacy: All processing is on-device. Online GeoIP is optional and off by default.",
                         style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Destination Watchlist section
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clickable { onNavigateToWatchlist() },
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
+        ) {
+            ListItem(
+                headlineContent = { Text("Destination Watchlist") },
+                supportingContent = {
+                    Text(
+                        if (watchlistEntries.isEmpty()) "Monitor traffic to specific hostnames or IPs"
+                        else "${watchlistEntries.size} ${if (watchlistEntries.size == 1) "destination" else "destinations"} watched",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+                trailingContent = {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
                     )
                 },
             )

@@ -25,6 +25,8 @@ import com.wirewhisper.ui.detail.FlowDetailScreen
 import com.wirewhisper.ui.history.HistoryScreen
 import com.wirewhisper.ui.now.NowScreen
 import com.wirewhisper.ui.settings.SettingsScreen
+import com.wirewhisper.ui.watchlist.WatchlistDetailScreen
+import com.wirewhisper.ui.watchlist.WatchlistScreen
 import kotlinx.serialization.Serializable
 
 // ── Route definitions ──────────────────────────────────────────
@@ -33,6 +35,8 @@ import kotlinx.serialization.Serializable
 @Serializable object HistoryRoute
 @Serializable object SettingsRoute
 @Serializable data class FlowDetailRoute(val flowId: Long)
+@Serializable object WatchlistRoute
+@Serializable data class WatchlistDetailRoute(val entryValue: String, val entryType: String)
 
 enum class TopLevelRoute(
     val label: String,
@@ -94,12 +98,32 @@ fun WireWhisperNavHost() {
                 )
             }
             composable<SettingsRoute> {
-                SettingsScreen()
+                SettingsScreen(
+                    onNavigateToWatchlist = {
+                        navController.navigate(WatchlistRoute)
+                    },
+                )
             }
             composable<FlowDetailRoute> { backStackEntry ->
                 val route = backStackEntry.toRoute<FlowDetailRoute>()
                 FlowDetailScreen(
                     flowId = route.flowId,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable<WatchlistRoute> {
+                WatchlistScreen(
+                    onBack = { navController.popBackStack() },
+                    onEntryClick = { entry ->
+                        navController.navigate(WatchlistDetailRoute(entry.value, entry.type))
+                    },
+                )
+            }
+            composable<WatchlistDetailRoute> { backStackEntry ->
+                val route = backStackEntry.toRoute<WatchlistDetailRoute>()
+                WatchlistDetailScreen(
+                    entryValue = route.entryValue,
+                    entryType = route.entryType,
                     onBack = { navController.popBackStack() },
                 )
             }

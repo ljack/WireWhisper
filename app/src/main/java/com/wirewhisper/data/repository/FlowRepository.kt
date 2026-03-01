@@ -35,6 +35,9 @@ interface FlowRepository {
 
     suspend fun deleteFlowsBefore(beforeMs: Long)
     suspend fun deleteAll()
+
+    fun getFlowsForDestination(hostname: String?, ipAddress: String?): Flow<List<FlowRecord>>
+    fun getFlowsMatchingDestinations(hostnames: List<String>, ipAddresses: List<String>): Flow<List<FlowRecord>>
 }
 
 /**
@@ -77,6 +80,12 @@ class RoomFlowRepository(
 
     override suspend fun deleteFlowsBefore(beforeMs: Long) = dao.deleteFlowsBefore(beforeMs)
     override suspend fun deleteAll() = dao.deleteAll()
+
+    override fun getFlowsForDestination(hostname: String?, ipAddress: String?): Flow<List<FlowRecord>> =
+        dao.getFlowsForDestination(hostname, ipAddress).map { list -> list.map { it.toFlowRecord() } }
+
+    override fun getFlowsMatchingDestinations(hostnames: List<String>, ipAddresses: List<String>): Flow<List<FlowRecord>> =
+        dao.getFlowsMatchingDestinations(hostnames, ipAddresses).map { list -> list.map { it.toFlowRecord() } }
 }
 
 /**
@@ -135,4 +144,20 @@ class InMemoryFlowRepository : FlowRepository {
             _flows.value = emptyList()
         }
     }
+
+    override fun getFlowsForDestination(hostname: String?, ipAddress: String?): Flow<List<FlowRecord>> =
+        _flows.map { list ->
+            list.filter { record ->
+                (hostname != null && record.dnsHostname == hostname) ||
+                (ipAddress != null && record.dstAddress.hostAddress?.let { it == ipAddress } == true)
+            }
+        }
+
+    override fun getFlowsMatchingDestinations(hostnames: List<String>, ipAddresses: List<String>): Flow<List<FlowRecord>> =
+        _flows.map { list ->
+            list.filter { record ->
+                record.dnsHostname in hostnames ||
+                record.dstAddress.hostAddress?.let { it in ipAddresses } == true
+            }
+        }
 }

@@ -12,3 +12,7 @@ fun formatBytesShort(bytes: Long): String = when {
     bytes < 1024 * 1024 -> "${bytes / 1024}KB"
     else -> "${bytes / (1024 * 1024)}MB"
 }
+
+private val IPV4_PATTERN = Regex("""\d{1,3}(\.\d{1,3}){3}""")
+
+fun isIpv4Address(value: String): Boolean = IPV4_PATTERN.matches(value)

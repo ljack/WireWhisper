@@ -43,6 +43,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -50,6 +52,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import com.wirewhisper.ui.util.formatBytes
+import com.wirewhisper.ui.util.rememberDrawableBitmap
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -70,13 +73,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 
@@ -396,6 +396,10 @@ fun NowScreen(
                                     onToggleHostnameBlock = { hostname ->
                                         viewModel.toggleHostnameBlock(group.packageName ?: return@AppGroupItem, hostname)
                                     },
+                                    onToggleWatch = { hostname, isWatched ->
+                                        if (isWatched) viewModel.unwatchDestination(hostname)
+                                        else viewModel.watchDestination(hostname)
+                                    },
                                     modifier = Modifier.animateItem(),
                                 )
                             }
@@ -432,6 +436,7 @@ private fun AppGroupItem(
     onSparklineClick: () -> Unit,
     onToggleBlock: () -> Unit,
     onToggleHostnameBlock: (String) -> Unit,
+    onToggleWatch: (String, Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -530,6 +535,7 @@ private fun AppGroupItem(
                             onToggleBlock = if (group.packageName != null && !group.isBlocked) {
                                 { onToggleHostnameBlock(hostname.hostname) }
                             } else null,
+                            onToggleWatch = { onToggleWatch(hostname.hostname, hostname.isWatched) },
                         )
                     }
                 }
@@ -754,15 +760,25 @@ private fun ShakingBlockIcon(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HostnameRow(
     model: HostnameGroupUiModel,
     indentDp: Int = 48,
     onToggleBlock: (() -> Unit)? = null,
+    onToggleWatch: (() -> Unit)? = null,
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .combinedClickable(
+                onClick = {},
+                onLongClick = if (onToggleWatch != null) {
+                    { showMenu = true }
+                } else null,
+            )
             .padding(start = indentDp.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)
             .alpha(if (model.isBlocked || model.parentAppBlocked) 0.5f else 1f),
         verticalAlignment = Alignment.CenterVertically,
@@ -773,14 +789,43 @@ private fun HostnameRow(
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.outline,
         )
+        if (model.isWatched) {
+            Spacer(Modifier.width(2.dp))
+            Icon(
+                Icons.Default.Visibility,
+                contentDescription = "Watched",
+                modifier = Modifier.size(12.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
         Spacer(Modifier.width(8.dp))
-        Text(
-            text = model.hostname,
-            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        Box(modifier = Modifier.weight(1f)) {
+            Text(
+                text = model.hostname,
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text(if (model.isWatched) "Unwatch destination" else "Watch destination") },
+                    onClick = {
+                        showMenu = false
+                        onToggleWatch?.invoke()
+                    },
+                    leadingIcon = {
+                        Icon(
+                            if (model.isWatched) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    },
+                )
+            }
+        }
         Spacer(Modifier.width(8.dp))
         if (model.flowCount > 1) {
             Text(
@@ -804,13 +849,6 @@ private fun HostnameRow(
                 buttonSize = 24,
             )
         }
-    }
-}
-
-@Composable
-private fun rememberDrawableBitmap(drawable: Drawable?): ImageBitmap? {
-    return remember(drawable) {
-        drawable?.toBitmap(64, 64)?.asImageBitmap()
     }
 }
 

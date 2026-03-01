@@ -46,4 +46,19 @@ interface FlowDao {
 
     @Query("DELETE FROM flows")
     suspend fun deleteAll()
+
+    @Query("""
+        SELECT * FROM flows
+        WHERE (:hostname IS NOT NULL AND dnsHostname = :hostname)
+           OR (:ipAddress IS NOT NULL AND dstAddress = :ipAddress)
+        ORDER BY lastSeen DESC
+    """)
+    fun getFlowsForDestination(hostname: String?, ipAddress: String?): Flow<List<FlowEntity>>
+
+    @Query("""
+        SELECT * FROM flows
+        WHERE dnsHostname IN (:hostnames) OR dstAddress IN (:ipAddresses)
+        ORDER BY lastSeen DESC
+    """)
+    fun getFlowsMatchingDestinations(hostnames: List<String>, ipAddresses: List<String>): Flow<List<FlowEntity>>
 }

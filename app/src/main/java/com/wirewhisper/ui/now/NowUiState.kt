@@ -68,6 +68,7 @@ data class HostnameGroupUiModel(
     val isBlocked: Boolean = false,
     val parentAppBlocked: Boolean = false,
     val blockedAttemptCount: Long = 0,
+    val isWatched: Boolean = false,
 )
 
 data class TrafficDetailUiModel(

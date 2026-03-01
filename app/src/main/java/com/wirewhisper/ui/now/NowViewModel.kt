@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import com.wirewhisper.ui.util.countryCodeToFlag
 import com.wirewhisper.ui.util.countryDisplayName
+import com.wirewhisper.ui.util.isIpv4Address
 
 class NowViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -394,6 +395,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         return flows
             .groupBy { it.dnsHostname ?: it.dstAddress.hostAddress ?: "unknown" }
             .map { (hostname, hFlows) ->
+                val ip = hFlows.firstOrNull()?.dstAddress?.hostAddress
                 HostnameGroupUiModel(
                     hostname = hostname,
                     flowCount = hFlows.size,
@@ -401,6 +403,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
                     isBlocked = packageName != null && app.blockingEngine.isBlocked(packageName, hostname),
                     parentAppBlocked = appBlocked,
                     blockedAttemptCount = if (packageName != null) app.blockingEngine.getHostnameBlockedCount(packageName, hostname) else 0,
+                    isWatched = app.watchlistEngine.isWatched(hostname, ip),
                 )
             }
             .sortedByDescending { it.totalBytes }
@@ -418,6 +421,15 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleCountryBlock(countryCode: String) {
         app.blockingEngine.toggleCountryBlock(countryCode)
+    }
+
+    fun watchDestination(hostname: String) {
+        val type = if (isIpv4Address(hostname)) "ip" else "hostname"
+        app.watchlistEngine.addEntry(type, hostname)
+    }
+
+    fun unwatchDestination(hostname: String) {
+        app.watchlistEngine.removeByValue(hostname.lowercase())
     }
 
     private fun formatCountryDisplay(code: String): String {
@@ -468,4 +480,5 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
 }

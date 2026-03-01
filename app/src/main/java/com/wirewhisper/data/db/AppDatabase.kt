@@ -8,14 +8,15 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [FlowEntity::class, GeoCacheEntity::class, BlockRuleEntity::class],
-    version = 5,
+    entities = [FlowEntity::class, GeoCacheEntity::class, BlockRuleEntity::class, WatchlistEntryEntity::class],
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun flowDao(): FlowDao
     abstract fun geoCacheDao(): GeoCacheDao
     abstract fun blockRuleDao(): BlockRuleDao
+    abstract fun watchlistDao(): WatchlistDao
 
     companion object {
         @Volatile
@@ -85,6 +86,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `watchlist` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `type` TEXT NOT NULL,
+                        `value` TEXT NOT NULL,
+                        `label` TEXT,
+                        `createdAt` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_watchlist_value` ON `watchlist` (`value`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_flows_dstAddress` ON `flows` (`dstAddress`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_flows_dnsHostname` ON `flows` (`dnsHostname`)")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -92,7 +110,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "wirewhisper.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .fallbackToDestructiveMigration(false)
                     .build()
                     .also { INSTANCE = it }

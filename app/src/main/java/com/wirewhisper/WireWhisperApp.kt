@@ -10,6 +10,7 @@ import com.wirewhisper.data.db.AppDatabase
 import com.wirewhisper.data.repository.FlowRepository
 import com.wirewhisper.data.repository.RoomFlowRepository
 import com.wirewhisper.firewall.BlockingEngine
+import com.wirewhisper.watchlist.WatchlistEngine
 import com.wirewhisper.flow.FlowTracker
 import com.wirewhisper.flow.HostnameResolver
 import com.wirewhisper.flow.TrafficSampler
@@ -75,6 +76,11 @@ class WireWhisperApp : Application() {
         BlockingEngine(db.blockRuleDao(), applicationScope)
     }
 
+    val watchlistEngine: WatchlistEngine by lazy {
+        val db = AppDatabase.getInstance(this)
+        WatchlistEngine(db.watchlistDao(), applicationScope)
+    }
+
     suspend fun resetHistory() {
         flowTracker.clearAll()
         trafficSampler.clearAll()
@@ -89,9 +95,8 @@ class WireWhisperApp : Application() {
     override fun onCreate() {
         super.onCreate()
         scheduleGeoDbRefresh()
-        applicationScope.launch {
-            blockingEngine.loadRules()
-        }
+        applicationScope.launch { blockingEngine.loadRules() }
+        applicationScope.launch { watchlistEngine.loadEntries() }
     }
 
     private fun scheduleGeoDbRefresh() {
