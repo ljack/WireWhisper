@@ -3,6 +3,9 @@ package com.wirewhisper.ui.now
 import android.graphics.drawable.Drawable
 import com.wirewhisper.flow.TrafficSample
 
+/** Whether the Now screen shows full chrome (header, toggles, search) or just the list. */
+enum class ScreenMode { NORMAL, FULLSCREEN }
+
 enum class GroupMode { BY_APP, BY_COUNTRY }
 
 enum class SortMode { RECENT_ACTIVITY, TOTAL_BYTES }
@@ -22,10 +25,11 @@ data class AppGroupUiModel(
     val icon: Drawable?,
     val totalBytes: Long,
     val hostnames: List<HostnameGroupUiModel>,
-    val sparklineSamples: List<Long>,
+    val sparklineSamples: List<TrafficSample>,
     val isExpanded: Boolean,
     val isBlocked: Boolean = false,
     val lastActivityTime: Long = 0L,
+    val blockedAttemptCount: Long = 0,
 )
 
 data class CountryGroupUiModel(
@@ -43,7 +47,7 @@ data class CountryAppUiModel(
     val icon: Drawable?,
     val totalBytes: Long,
     val hostnames: List<HostnameGroupUiModel>,
-    val sparklineSamples: List<Long>,
+    val sparklineSamples: List<TrafficSample>,
     val isExpanded: Boolean,
     val isBlocked: Boolean = false,
     val lastActivityTime: Long = 0L,
@@ -55,6 +59,7 @@ data class HostnameGroupUiModel(
     val totalBytes: Long,
     val isBlocked: Boolean = false,
     val parentAppBlocked: Boolean = false,
+    val blockedAttemptCount: Long = 0,
 )
 
 data class TrafficDetailUiModel(
@@ -63,4 +68,6 @@ data class TrafficDetailUiModel(
     val samples: List<TrafficSample>,
     val totalSent: Long,
     val totalReceived: Long,
+    val totalBlockedSent: Long = 0,
+    val totalBlockedReceived: Long = 0,
 )

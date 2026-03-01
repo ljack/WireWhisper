@@ -22,8 +22,9 @@ import com.wirewhisper.flow.TrafficSample
 fun TrafficChart(
     samples: List<TrafficSample>,
     modifier: Modifier = Modifier,
-    sentColor: Color = Color(0xFFE91E63),    // pink/magenta
-    receivedColor: Color = Color(0xFF00BCD4), // cyan
+    sentColor: Color = Color(0xFFE91E63),       // pink/magenta
+    receivedColor: Color = Color(0xFF00BCD4),    // cyan
+    blockedColor: Color = Color(0xFFFF5722),     // deep orange for blocked
 ) {
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -44,8 +45,9 @@ fun TrafficChart(
         val chartHeight = size.height - topPadding - bottomPadding
         val centerY = topPadding + chartHeight / 2f
 
-        val maxSent = samples.maxOf { it.sent }.coerceAtLeast(1)
-        val maxRecv = samples.maxOf { it.received }.coerceAtLeast(1)
+        // Max includes both allowed and blocked
+        val maxSent = samples.maxOf { it.sent + it.blockedSent }.coerceAtLeast(1)
+        val maxRecv = samples.maxOf { it.received + it.blockedReceived }.coerceAtLeast(1)
         val maxVal = maxOf(maxSent, maxRecv)
 
         val barWidth = chartWidth / samples.size
@@ -65,28 +67,77 @@ fun TrafficChart(
             val sample = samples[i]
             val x = leftPadding + i * barWidth
 
-            // Sent (above center)
-            if (sample.sent > 0) {
-                val ratio = sample.sent.toFloat() / maxVal
-                val barH = (ratio * halfHeight).coerceAtLeast(2f)
-                val alpha = (0.3f + 0.7f * ratio).coerceAtMost(1f)
-                drawRect(
-                    color = sentColor.copy(alpha = alpha),
-                    topLeft = Offset(x + gap / 2, centerY - barH),
-                    size = Size(barWidth - gap, barH),
-                )
+            // === Sent (above center) ===
+            val totalSent = sample.sent + sample.blockedSent
+            if (totalSent > 0) {
+                val totalRatio = totalSent.toFloat() / maxVal
+                val totalH = (totalRatio * halfHeight).coerceAtLeast(2f)
+                val alpha = (0.3f + 0.7f * totalRatio).coerceAtMost(1f)
+
+                if (sample.blockedSent > 0 && sample.sent > 0) {
+                    // Stacked: allowed closer to center, blocked on top
+                    val allowedRatio = sample.sent.toFloat() / totalSent
+                    val allowedH = totalH * allowedRatio
+                    val blockedH = totalH - allowedH
+                    drawRect(
+                        color = sentColor.copy(alpha = alpha),
+                        topLeft = Offset(x + gap / 2, centerY - allowedH),
+                        size = Size(barWidth - gap, allowedH),
+                    )
+                    drawRect(
+                        color = blockedColor.copy(alpha = alpha),
+                        topLeft = Offset(x + gap / 2, centerY - totalH),
+                        size = Size(barWidth - gap, blockedH),
+                    )
+                } else if (sample.blockedSent > 0) {
+                    drawRect(
+                        color = blockedColor.copy(alpha = alpha),
+                        topLeft = Offset(x + gap / 2, centerY - totalH),
+                        size = Size(barWidth - gap, totalH),
+                    )
+                } else {
+                    drawRect(
+                        color = sentColor.copy(alpha = alpha),
+                        topLeft = Offset(x + gap / 2, centerY - totalH),
+                        size = Size(barWidth - gap, totalH),
+                    )
+                }
             }
 
-            // Received (below center)
-            if (sample.received > 0) {
-                val ratio = sample.received.toFloat() / maxVal
-                val barH = (ratio * halfHeight).coerceAtLeast(2f)
-                val alpha = (0.3f + 0.7f * ratio).coerceAtMost(1f)
-                drawRect(
-                    color = receivedColor.copy(alpha = alpha),
-                    topLeft = Offset(x + gap / 2, centerY),
-                    size = Size(barWidth - gap, barH),
-                )
+            // === Received (below center) ===
+            val totalRecv = sample.received + sample.blockedReceived
+            if (totalRecv > 0) {
+                val totalRatio = totalRecv.toFloat() / maxVal
+                val totalH = (totalRatio * halfHeight).coerceAtLeast(2f)
+                val alpha = (0.3f + 0.7f * totalRatio).coerceAtMost(1f)
+
+                if (sample.blockedReceived > 0 && sample.received > 0) {
+                    val allowedRatio = sample.received.toFloat() / totalRecv
+                    val allowedH = totalH * allowedRatio
+                    val blockedH = totalH - allowedH
+                    drawRect(
+                        color = receivedColor.copy(alpha = alpha),
+                        topLeft = Offset(x + gap / 2, centerY),
+                        size = Size(barWidth - gap, allowedH),
+                    )
+                    drawRect(
+                        color = blockedColor.copy(alpha = alpha),
+                        topLeft = Offset(x + gap / 2, centerY + allowedH),
+                        size = Size(barWidth - gap, blockedH),
+                    )
+                } else if (sample.blockedReceived > 0) {
+                    drawRect(
+                        color = blockedColor.copy(alpha = alpha),
+                        topLeft = Offset(x + gap / 2, centerY),
+                        size = Size(barWidth - gap, totalH),
+                    )
+                } else {
+                    drawRect(
+                        color = receivedColor.copy(alpha = alpha),
+                        topLeft = Offset(x + gap / 2, centerY),
+                        size = Size(barWidth - gap, totalH),
+                    )
+                }
             }
         }
 
@@ -99,12 +150,12 @@ fun TrafficChart(
         val intervalSeconds = 10
         val totalSeconds = samples.size
         for (s in intervalSeconds..totalSeconds step intervalSeconds) {
-            val x = leftPadding + (s.toFloat() / totalSeconds) * chartWidth
+            val xLabel = leftPadding + (s.toFloat() / totalSeconds) * chartWidth
             val label = "${s}s"
             val measured = textMeasurer.measure(label, labelStyle)
             drawText(
                 textLayoutResult = measured,
-                topLeft = Offset(x - measured.size.width / 2f, size.height - bottomPadding + 4f),
+                topLeft = Offset(xLabel - measured.size.width / 2f, size.height - bottomPadding + 4f),
             )
         }
     }

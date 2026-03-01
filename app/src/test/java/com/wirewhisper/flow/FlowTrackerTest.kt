@@ -210,14 +210,28 @@ class FlowTrackerTest {
     }
 
     @Test
-    fun `trafficSampler records traffic on onPacket`() {
+    fun `recordTrafficSample records traffic via sampler`() {
         val sampler = TrafficSampler()
         tracker.trafficSampler = sampler
-        // Need a flow with known UID for sampler — default UID is -1
-        tracker.onPacket(makePacketInfo(totalLength = 500), outgoing = true)
+        val info = makePacketInfo(totalLength = 500)
+        tracker.onPacket(info, outgoing = true)
+        tracker.recordTrafficSample(info, outgoing = true)
         // Sampler records uid=-1 (UNKNOWN_UID) with 500 bytes
         val samples = sampler.getAppSamples(-1)
         assertEquals(TrafficSampler.WINDOW_SECONDS, samples.size)
         assertTrue(samples.last() >= 500L)
+    }
+
+    @Test
+    fun `recordTrafficSample records blocked traffic`() {
+        val sampler = TrafficSampler()
+        tracker.trafficSampler = sampler
+        val info = makePacketInfo(totalLength = 300)
+        tracker.onPacket(info, outgoing = true)
+        tracker.recordTrafficSample(info, outgoing = true, blocked = true)
+        val samples = sampler.getAppDirectionalSamples(-1)
+        assertEquals(TrafficSampler.WINDOW_SECONDS, samples.size)
+        assertTrue(samples.last().blockedSent >= 300L)
+        assertEquals(0L, samples.last().sent)
     }
 }

@@ -148,4 +148,26 @@ class BlockingEngineTest {
 
         assertTrue("com.example.app" in engine.blockedAppsFlow.value)
     }
+
+    @Test
+    fun `notifyBlocked increments app counter`() {
+        val engine = BlockingEngine(FakeBlockRuleDao(), CoroutineScope(Dispatchers.Unconfined))
+        assertEquals(0L, engine.getAppBlockedCount("com.example.app"))
+
+        engine.notifyBlocked("com.example.app", null)
+        assertEquals(1L, engine.getAppBlockedCount("com.example.app"))
+
+        engine.notifyBlocked("com.example.app", null)
+        assertEquals(2L, engine.getAppBlockedCount("com.example.app"))
+    }
+
+    @Test
+    fun `notifyBlocked increments hostname counter`() {
+        val engine = BlockingEngine(FakeBlockRuleDao(), CoroutineScope(Dispatchers.Unconfined))
+        assertEquals(0L, engine.getHostnameBlockedCount("com.example.app", "ads.example.com"))
+
+        engine.notifyBlocked("com.example.app", "ads.example.com")
+        assertEquals(1L, engine.getHostnameBlockedCount("com.example.app", "ads.example.com"))
+        assertEquals(1L, engine.getAppBlockedCount("com.example.app"))
+    }
 }

@@ -187,9 +187,12 @@ class TunProcessor(
             Log.w(TAG, "Enrichment error (non-fatal)", e)
         }
 
-        // 4. Check if blocked
+        // 4. Check if blocked & record traffic (after enrichment so UID is resolved)
         val flow = flowTracker.getFlow(info.flowKey)
-        if (flow != null && blockingEngine.isBlocked(flow.packageName, flow.dnsHostname)) {
+        val isBlocked = flow != null && blockingEngine.isBlocked(flow.packageName, flow.dnsHostname)
+        flowTracker.recordTrafficSample(info, outgoing = true, blocked = isBlocked)
+        if (isBlocked) {
+            blockingEngine.notifyBlocked(flow!!.packageName!!, flow.dnsHostname)
             return  // drop packet
         }
 
@@ -299,6 +302,7 @@ class TunProcessor(
                     totalLength = responseBuffer.remaining(),
                 )
                 flowTracker.onPacket(responseInfo, outgoing = false)
+                flowTracker.recordTrafficSample(responseInfo, outgoing = false)
 
                 // Build response IP+UDP packet and write to TUN
                 val responsePacket = buildUdpResponsePacket(
@@ -454,6 +458,7 @@ class TunProcessor(
                     totalLength = read,
                 )
                 flowTracker.onPacket(responseInfo, outgoing = false)
+                flowTracker.recordTrafficSample(responseInfo, outgoing = false)
 
                 // Build TCP data packet back to app
                 val dataPacket = buildTcpDataPacket(session, payload)

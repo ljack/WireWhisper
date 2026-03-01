@@ -31,19 +31,31 @@ fun ipv4ToLong(ip: String): Long {
 tasks.register("downloadGeoDb") {
     group = "geoip"
     description = "Download DB-IP Lite CSV and convert to binary geoip-country.bin"
+    onlyIf { !file("src/main/assets/geoip-country.bin").exists() }
 
     doLast {
         val now = LocalDate.now()
-        val yearMonth = now.format(DateTimeFormatter.ofPattern("yyyy-MM"))
         val versionDate = now.format(DateTimeFormatter.ofPattern("yyyyMMdd")).toInt()
-        val csvUrl = "https://download.db-ip.com/free/dbip-country-lite-$yearMonth.csv.gz"
         val outputFile = file("src/main/assets/geoip-country.bin")
 
-        println("Downloading $csvUrl ...")
-        val csvBytes = URL(csvUrl).openStream().use { raw ->
-            GZIPInputStream(raw).use { it.readBytes() }
+        // Try current month, then fall back to previous month
+        val candidates = listOf(now, now.minusMonths(1))
+        var csvBytes: ByteArray? = null
+        for (date in candidates) {
+            val yearMonth = date.format(DateTimeFormatter.ofPattern("yyyy-MM"))
+            val csvUrl = "https://download.db-ip.com/free/dbip-country-lite-$yearMonth.csv.gz"
+            println("Trying $csvUrl ...")
+            try {
+                csvBytes = URL(csvUrl).openStream().use { raw ->
+                    GZIPInputStream(raw).use { it.readBytes() }
+                }
+                println("Downloaded ${csvBytes!!.size} bytes of CSV")
+                break
+            } catch (e: java.io.FileNotFoundException) {
+                println("Not available, trying previous month...")
+            }
         }
-        println("Downloaded ${csvBytes.size} bytes of CSV")
+        if (csvBytes == null) throw GradleException("Could not download DB-IP CSV for current or previous month")
 
         // Parse CSV, skip IPv6
         val ranges = mutableListOf<GeoRange>()

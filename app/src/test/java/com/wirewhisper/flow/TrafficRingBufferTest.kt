@@ -94,4 +94,30 @@ class TrafficRingBufferTest {
         val total = buffer.totalSnapshot()
         assertEquals(300L, total.last())
     }
+
+    @Test
+    fun `blocked traffic tracked separately from allowed`() {
+        val buffer = TrafficRingBuffer(5)
+        buffer.add(100L, outgoing = true, blocked = false)
+        buffer.add(50L, outgoing = true, blocked = true)
+        buffer.add(200L, outgoing = false, blocked = false)
+        buffer.add(75L, outgoing = false, blocked = true)
+        val snapshot = buffer.snapshot()
+        assertEquals(100L, snapshot.last().sent)
+        assertEquals(50L, snapshot.last().blockedSent)
+        assertEquals(200L, snapshot.last().received)
+        assertEquals(75L, snapshot.last().blockedReceived)
+        assertEquals(425L, snapshot.last().total)
+        assertEquals(300L, snapshot.last().allowedTotal)
+        assertEquals(125L, snapshot.last().blockedTotal)
+    }
+
+    @Test
+    fun `totalSnapshot includes blocked traffic`() {
+        val buffer = TrafficRingBuffer(5)
+        buffer.add(100L, outgoing = true, blocked = false)
+        buffer.add(50L, outgoing = true, blocked = true)
+        val total = buffer.totalSnapshot()
+        assertEquals(150L, total.last())
+    }
 }

@@ -24,6 +24,7 @@ fun TrafficBottomSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val hasBlocked = detail.totalBlockedSent + detail.totalBlockedReceived > 0
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -71,6 +72,28 @@ fun TrafficBottomSheet(
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF00BCD4),
                     )
+                }
+            }
+
+            // Blocked totals (only show if there's blocked traffic)
+            if (hasBlocked) {
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row {
+                        Text(
+                            text = "Blocked: ",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = formatBytes(detail.totalBlockedSent + detail.totalBlockedReceived),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFFFF5722),
+                        )
+                    }
                 }
             }
 

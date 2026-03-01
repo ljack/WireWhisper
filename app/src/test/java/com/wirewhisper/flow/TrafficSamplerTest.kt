@@ -91,4 +91,23 @@ class TrafficSamplerTest {
         assertEquals(TrafficSampler.WINDOW_SECONDS, samples.size)
         assertTrue(samples.all { it.sent == 0L && it.received == 0L })
     }
+
+    @Test
+    fun `blocked traffic recorded separately`() {
+        val sampler = TrafficSampler()
+        sampler.recordTraffic(uid = 1, bytes = 100, outgoing = true, blocked = false)
+        sampler.recordTraffic(uid = 1, bytes = 50, outgoing = true, blocked = true)
+        val samples = sampler.getAppDirectionalSamples(1)
+        assertEquals(100L, samples.last().sent)
+        assertEquals(50L, samples.last().blockedSent)
+    }
+
+    @Test
+    fun `getAppSamples includes blocked traffic in total`() {
+        val sampler = TrafficSampler()
+        sampler.recordTraffic(uid = 1, bytes = 100, outgoing = true, blocked = false)
+        sampler.recordTraffic(uid = 1, bytes = 50, outgoing = true, blocked = true)
+        val samples = sampler.getAppSamples(1)
+        assertTrue("Total should include blocked", samples.last() >= 150L)
+    }
 }

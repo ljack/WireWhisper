@@ -28,6 +28,10 @@ class BlockingEngine(
     private val _blockedHostnamesFlow = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     val blockedHostnamesFlow: StateFlow<Map<String, Set<String>>> = _blockedHostnamesFlow.asStateFlow()
 
+    // Blocked attempt counters for UI shake animation
+    private val appBlockedCounts = ConcurrentHashMap<String, Long>()
+    private val hostnameBlockedCounts = ConcurrentHashMap<String, Long>() // "pkg:host" → count
+
     suspend fun loadRules() {
         val rules = dao.getAllRulesOnce()
         blockedApps.clear()
@@ -87,6 +91,19 @@ class BlockingEngine(
             emitFlows()
         }
     }
+
+    /** Called by TunProcessor when a packet is actually dropped. */
+    fun notifyBlocked(packageName: String, hostname: String?) {
+        appBlockedCounts.compute(packageName) { _, v -> (v ?: 0) + 1 }
+        if (hostname != null) {
+            hostnameBlockedCounts.compute("$packageName:$hostname") { _, v -> (v ?: 0) + 1 }
+        }
+    }
+
+    fun getAppBlockedCount(packageName: String): Long = appBlockedCounts[packageName] ?: 0
+
+    fun getHostnameBlockedCount(packageName: String, hostname: String): Long =
+        hostnameBlockedCounts["$packageName:$hostname"] ?: 0
 
     private fun emitFlows() {
         _blockedAppsFlow.value = blockedApps.toSet()

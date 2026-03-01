@@ -19,6 +19,18 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val ksFile = file("release.keystore")
+            if (ksFile.exists()) {
+                storeFile = ksFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("KEY_ALIAS") ?: ""
+                keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -26,6 +38,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            val ksFile = file("release.keystore")
+            if (ksFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
@@ -34,6 +50,10 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    lint {
+        // AGP 9.0.1 has a lint crash on build script analysis — disable for now
+        checkReleaseBuilds = false
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
@@ -75,3 +95,8 @@ dependencies {
 }
 
 apply(from = "buildscripts/download-geoip.gradle.kts")
+
+// Auto-download GeoIP database if missing
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn("downloadGeoDb")
+}

@@ -2,8 +2,15 @@ package com.wirewhisper.flow
 
 import java.util.concurrent.ConcurrentHashMap
 
-data class TrafficSample(val sent: Long, val received: Long) {
-    val total: Long get() = sent + received
+data class TrafficSample(
+    val sent: Long,
+    val received: Long,
+    val blockedSent: Long = 0,
+    val blockedReceived: Long = 0,
+) {
+    val total: Long get() = sent + received + blockedSent + blockedReceived
+    val allowedTotal: Long get() = sent + received
+    val blockedTotal: Long get() = blockedSent + blockedReceived
 }
 
 /**
@@ -19,10 +26,10 @@ class TrafficSampler {
 
     private val buffers = ConcurrentHashMap<Int, TrafficRingBuffer>()
 
-    fun recordTraffic(uid: Int, bytes: Int, outgoing: Boolean) {
+    fun recordTraffic(uid: Int, bytes: Int, outgoing: Boolean, blocked: Boolean = false) {
         if (bytes <= 0) return
         val buffer = buffers.getOrPut(uid) { TrafficRingBuffer(WINDOW_SECONDS) }
-        buffer.add(bytes.toLong(), outgoing)
+        buffer.add(bytes.toLong(), outgoing, blocked)
     }
 
     fun getAppSamples(uid: Int): List<Long> {
@@ -42,21 +49,25 @@ class TrafficSampler {
 class TrafficRingBuffer(private val size: Int) {
     private val sentData = LongArray(size)
     private val recvData = LongArray(size)
+    private val blockedSentData = LongArray(size)
+    private val blockedRecvData = LongArray(size)
     private var headSecond = 0L
     private var headIndex = 0
 
     @Synchronized
-    fun add(bytes: Long, outgoing: Boolean) {
+    fun add(bytes: Long, outgoing: Boolean, blocked: Boolean = false) {
         val nowSecond = System.currentTimeMillis() / 1000
         if (headSecond == 0L) {
             headSecond = nowSecond
             headIndex = 0
         }
         advance(nowSecond)
-        if (outgoing) {
-            sentData[headIndex] += bytes
+        if (blocked) {
+            if (outgoing) blockedSentData[headIndex] += bytes
+            else blockedRecvData[headIndex] += bytes
         } else {
-            recvData[headIndex] += bytes
+            if (outgoing) sentData[headIndex] += bytes
+            else recvData[headIndex] += bytes
         }
     }
 
@@ -69,7 +80,7 @@ class TrafficRingBuffer(private val size: Int) {
         val result = ArrayList<TrafficSample>(size)
         for (i in 0 until size) {
             val idx = (headIndex - size + 1 + i + size * 2) % size
-            result.add(TrafficSample(sentData[idx], recvData[idx]))
+            result.add(TrafficSample(sentData[idx], recvData[idx], blockedSentData[idx], blockedRecvData[idx]))
         }
         return result
     }
@@ -86,6 +97,8 @@ class TrafficRingBuffer(private val size: Int) {
             headIndex = (headIndex + 1) % size
             sentData[headIndex] = 0
             recvData[headIndex] = 0
+            blockedSentData[headIndex] = 0
+            blockedRecvData[headIndex] = 0
         }
         headSecond = nowSecond
     }

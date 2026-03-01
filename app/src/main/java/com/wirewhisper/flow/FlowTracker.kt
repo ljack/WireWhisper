@@ -79,12 +79,6 @@ class FlowTracker {
             }
         }
 
-        // Record traffic for sparkline
-        val flowRecord = flows[key]
-        if (flowRecord != null) {
-            trafficSampler?.recordTraffic(flowRecord.uid, info.totalLength, outgoing)
-        }
-
         // Throttled snapshot for UI
         if (now - lastSnapshotTime > SNAPSHOT_DEBOUNCE_MS) {
             lastSnapshotTime = now
@@ -94,6 +88,18 @@ class FlowTracker {
 
     /** Returns a flow record by key, or null if not tracked. */
     fun getFlow(key: FlowKey): FlowRecord? = flows[key]
+
+    /**
+     * Records traffic for sparkline/chart rendering, called after the blocking
+     * check so we can distinguish allowed vs blocked bytes.
+     */
+    fun recordTrafficSample(info: PacketInfo, outgoing: Boolean, blocked: Boolean = false) {
+        val key = if (outgoing) info.flowKey else info.reverseFlowKey
+        val flowRecord = flows[key]
+        if (flowRecord != null) {
+            trafficSampler?.recordTraffic(flowRecord.uid, info.totalLength, outgoing, blocked)
+        }
+    }
 
     /**
      * Enriches a flow with app identity info. Called by [UidResolver]

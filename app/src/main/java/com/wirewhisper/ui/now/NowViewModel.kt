@@ -139,6 +139,8 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
             samples = samples,
             totalSent = samples.sumOf { it.sent },
             totalReceived = samples.sumOf { it.received },
+            totalBlockedSent = samples.sumOf { it.blockedSent },
+            totalBlockedReceived = samples.sumOf { it.blockedReceived },
         )
     }
 
@@ -258,7 +260,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
                 val (appName, packageName) = resolveAppInfo(uid, uidFlows)
                 val hostnameGroups = buildHostnameGroups(uidFlows)
                 val totalBytes = uidFlows.sumOf { it.bytesSent + it.bytesReceived }
-                val sparkline = app.trafficSampler.getAppSamples(uid)
+                val sparkline = app.trafficSampler.getAppDirectionalSamples(uid)
                 val key = "$country:$uid"
 
                 CountryAppUiModel(
@@ -306,8 +308,9 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
         val isBlocked = packageName != null && app.blockingEngine.isBlocked(packageName, null)
         val hostnameGroups = buildHostnameGroups(uidFlows, packageName, isBlocked)
         val totalBytes = uidFlows.sumOf { it.bytesSent + it.bytesReceived }
-        val sparkline = app.trafficSampler.getAppSamples(uid)
+        val sparkline = app.trafficSampler.getAppDirectionalSamples(uid)
         val lastActivity = uidFlows.maxOf { it.lastSeen }
+        val blockedCount = if (packageName != null) app.blockingEngine.getAppBlockedCount(packageName) else 0
 
         return AppGroupUiModel(
             uid = uid,
@@ -320,6 +323,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
             isExpanded = isExpanded,
             isBlocked = isBlocked,
             lastActivityTime = lastActivity,
+            blockedAttemptCount = blockedCount,
         )
     }
 
@@ -337,6 +341,7 @@ class NowViewModel(application: Application) : AndroidViewModel(application) {
                     totalBytes = hFlows.sumOf { it.bytesSent + it.bytesReceived },
                     isBlocked = packageName != null && app.blockingEngine.isBlocked(packageName, hostname),
                     parentAppBlocked = appBlocked,
+                    blockedAttemptCount = if (packageName != null) app.blockingEngine.getHostnameBlockedCount(packageName, hostname) else 0,
                 )
             }
             .sortedByDescending { it.totalBytes }

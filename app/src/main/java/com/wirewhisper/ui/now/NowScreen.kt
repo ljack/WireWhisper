@@ -5,6 +5,8 @@ import android.graphics.drawable.Drawable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,6 +30,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PlayArrow
@@ -47,7 +52,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -56,6 +64,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -71,6 +80,7 @@ fun NowScreen(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val groupMode by viewModel.groupMode.collectAsStateWithLifecycle()
     val trafficDetail by viewModel.trafficDetail.collectAsStateWithLifecycle()
+    var fullscreen by rememberSaveable { mutableStateOf(false) }
 
     val vpnPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -90,31 +100,33 @@ fun NowScreen(
 
     Scaffold(
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = {
-                    if (isRunning) {
-                        viewModel.stopVpn()
-                    } else {
-                        val prepareIntent = viewModel.prepareVpn()
-                        if (prepareIntent != null) {
-                            vpnPermissionLauncher.launch(prepareIntent)
+            if (!fullscreen) {
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        if (isRunning) {
+                            viewModel.stopVpn()
                         } else {
-                            viewModel.startVpn()
+                            val prepareIntent = viewModel.prepareVpn()
+                            if (prepareIntent != null) {
+                                vpnPermissionLauncher.launch(prepareIntent)
+                            } else {
+                                viewModel.startVpn()
+                            }
                         }
-                    }
-                },
-                icon = {
-                    Icon(
-                        if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
-                        contentDescription = null,
-                    )
-                },
-                text = { Text(if (isRunning) "Stop" else "Start") },
-                containerColor = if (isRunning)
-                    MaterialTheme.colorScheme.error
-                else
-                    MaterialTheme.colorScheme.primary,
-            )
+                    },
+                    icon = {
+                        Icon(
+                            if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
+                            contentDescription = null,
+                        )
+                    },
+                    text = { Text(if (isRunning) "Stop" else "Start") },
+                    containerColor = if (isRunning)
+                        MaterialTheme.colorScheme.error
+                    else
+                        MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     ) { innerPadding ->
         Column(
@@ -122,101 +134,135 @@ fun NowScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Live Flows",
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-                Text(
-                    text = "${state.totalActiveFlows} active",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            // Group mode toggle
-            SingleChoiceSegmentedButtonRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-            ) {
-                SegmentedButton(
-                    selected = groupMode == GroupMode.BY_APP,
-                    onClick = { viewModel.onGroupModeChanged(GroupMode.BY_APP) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+            if (!fullscreen) {
+                // Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("App")
+                    Text(
+                        text = "Live Flows",
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${state.totalActiveFlows} active",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        IconButton(onClick = { fullscreen = true }) {
+                            Icon(
+                                Icons.Default.Fullscreen,
+                                contentDescription = "Fullscreen",
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
                 }
-                SegmentedButton(
-                    selected = groupMode == GroupMode.BY_COUNTRY,
-                    onClick = { viewModel.onGroupModeChanged(GroupMode.BY_COUNTRY) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                ) {
-                    Text("Country")
-                }
-            }
 
-            Spacer(Modifier.height(8.dp))
-
-            // Sort mode toggle (only in BY_APP mode)
-            if (groupMode == GroupMode.BY_APP) {
+                // Group mode toggle
                 SingleChoiceSegmentedButtonRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
                 ) {
                     SegmentedButton(
-                        selected = state.sortMode == SortMode.RECENT_ACTIVITY,
-                        onClick = { viewModel.onSortModeChanged(SortMode.RECENT_ACTIVITY) },
+                        selected = groupMode == GroupMode.BY_APP,
+                        onClick = { viewModel.onGroupModeChanged(GroupMode.BY_APP) },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                     ) {
-                        Text("Recent")
+                        Text("App")
                     }
                     SegmentedButton(
-                        selected = state.sortMode == SortMode.TOTAL_BYTES,
-                        onClick = { viewModel.onSortModeChanged(SortMode.TOTAL_BYTES) },
+                        selected = groupMode == GroupMode.BY_COUNTRY,
+                        onClick = { viewModel.onGroupModeChanged(GroupMode.BY_COUNTRY) },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                     ) {
-                        Text("Bytes")
+                        Text("Country")
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-            }
 
-            // Search bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = viewModel::onSearchQueryChanged,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                placeholder = {
-                    Text(
-                        if (groupMode == GroupMode.BY_APP) "Filter apps..."
-                        else "Filter countries..."
-                    )
-                },
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = null)
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                Spacer(Modifier.height(8.dp))
+
+                // Sort mode toggle (only in BY_APP mode)
+                if (groupMode == GroupMode.BY_APP) {
+                    SingleChoiceSegmentedButtonRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                    ) {
+                        SegmentedButton(
+                            selected = state.sortMode == SortMode.RECENT_ACTIVITY,
+                            onClick = { viewModel.onSortModeChanged(SortMode.RECENT_ACTIVITY) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                        ) {
+                            Text("Recent")
+                        }
+                        SegmentedButton(
+                            selected = state.sortMode == SortMode.TOTAL_BYTES,
+                            onClick = { viewModel.onSortModeChanged(SortMode.TOTAL_BYTES) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        ) {
+                            Text("Bytes")
                         }
                     }
-                },
-                singleLine = true,
-            )
+                    Spacer(Modifier.height(8.dp))
+                }
 
-            Spacer(Modifier.height(8.dp))
+                // Search bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = viewModel::onSearchQueryChanged,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    placeholder = {
+                        Text(
+                            if (groupMode == GroupMode.BY_APP) "Filter apps..."
+                            else "Filter countries..."
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                )
+
+                Spacer(Modifier.height(8.dp))
+            } else {
+                // Fullscreen: minimal header with exit button
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "${state.totalActiveFlows} active",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f).padding(start = 8.dp),
+                    )
+                    IconButton(onClick = { fullscreen = false }) {
+                        Icon(
+                            Icons.Default.FullscreenExit,
+                            contentDescription = "Exit fullscreen",
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
 
             val isEmpty = when (groupMode) {
                 GroupMode.BY_APP -> state.appGroups.isEmpty()
@@ -368,20 +414,13 @@ private fun AppGroupItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                // Block toggle
+                // Block toggle with shake animation
                 if (group.packageName != null) {
-                    IconButton(
+                    ShakingBlockIcon(
+                        isBlocked = group.isBlocked,
+                        blockedAttemptCount = group.blockedAttemptCount,
                         onClick = onToggleBlock,
-                        modifier = Modifier.size(32.dp),
-                    ) {
-                        Icon(
-                            imageVector = if (group.isBlocked) Icons.Default.Block else Icons.Default.CheckCircle,
-                            contentDescription = if (group.isBlocked) "Unblock" else "Block",
-                            modifier = Modifier.size(18.dp),
-                            tint = if (group.isBlocked) MaterialTheme.colorScheme.error
-                            else Color(0xFF4CAF50),
-                        )
-                    }
+                    )
                 } else {
                     Spacer(Modifier.width(4.dp))
                 }
@@ -573,6 +612,51 @@ private fun CountryAppRow(
 
 // region Shared composables
 
+/** Block icon with damped shake animation on new blocked attempts. */
+@Composable
+private fun ShakingBlockIcon(
+    isBlocked: Boolean,
+    blockedAttemptCount: Long,
+    onClick: () -> Unit,
+    iconSize: Int = 18,
+    buttonSize: Int = 32,
+) {
+    val shakeOffset = remember { Animatable(0f) }
+
+    LaunchedEffect(blockedAttemptCount) {
+        if (blockedAttemptCount > 0 && isBlocked) {
+            shakeOffset.animateTo(
+                targetValue = 0f,
+                animationSpec = keyframes {
+                    durationMillis = 400
+                    (-4f) at 50
+                    4f at 100
+                    (-3f) at 150
+                    3f at 200
+                    (-2f) at 250
+                    2f at 300
+                    0f at 400
+                }
+            )
+        }
+    }
+
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(buttonSize.dp)
+            .offset { IntOffset(shakeOffset.value.toInt(), 0) },
+    ) {
+        Icon(
+            imageVector = if (isBlocked) Icons.Default.Block else Icons.Default.CheckCircle,
+            contentDescription = if (isBlocked) "Unblock" else "Block",
+            modifier = Modifier.size(iconSize.dp),
+            tint = if (isBlocked) MaterialTheme.colorScheme.error
+            else Color(0xFF4CAF50),
+        )
+    }
+}
+
 @Composable
 private fun HostnameRow(
     model: HostnameGroupUiModel,
@@ -615,21 +699,13 @@ private fun HostnameRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (onToggleBlock != null) {
-            IconButton(
+            ShakingBlockIcon(
+                isBlocked = model.isBlocked || model.parentAppBlocked,
+                blockedAttemptCount = model.blockedAttemptCount,
                 onClick = onToggleBlock,
-                modifier = Modifier.size(24.dp),
-                enabled = !model.parentAppBlocked,
-            ) {
-                Icon(
-                    imageVector = if (model.isBlocked || model.parentAppBlocked) Icons.Default.Block
-                    else Icons.Default.CheckCircle,
-                    contentDescription = if (model.isBlocked) "Unblock" else "Block",
-                    modifier = Modifier.size(14.dp),
-                    tint = if (model.isBlocked || model.parentAppBlocked) {
-                        MaterialTheme.colorScheme.error.copy(alpha = if (model.parentAppBlocked) 0.4f else 1f)
-                    } else Color(0xFF4CAF50),
-                )
-            }
+                iconSize = 14,
+                buttonSize = 24,
+            )
         }
     }
 }
